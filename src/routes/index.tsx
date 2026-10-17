@@ -66,11 +66,9 @@ function Index() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      <header className="bg-foreground text-background border-b-2 border-foreground px-6 py-5 flex items-center justify-between">
-        <div className="flex items-center gap-3"><img src={logo.url} alt="199-Brand logo" className="h-12 w-12" /><h1 className="text-2xl font-black tracking-tighter">199-BRAND</h1></div>
-        <span className="font-mono text-xs uppercase tracking-widest">Lead Engine</span>
-      </header>
       <main className="mx-auto max-w-6xl p-6 space-y-8">
+        <img src={logo.url} alt="199-Brand logo" className="h-16 w-16" />
+
         <section className="grid gap-4 md:grid-cols-4 items-end">
           <label className="space-y-2">
             <span className="font-mono text-xs uppercase tracking-widest">City</span>
