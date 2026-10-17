@@ -62,7 +62,9 @@ function Index() {
     setTimeout(() => setCopied(null), 1500);
   };
 
+  const visible = leads.filter((l) => l.website === "None");
   const input = "w-full border-2 border-foreground bg-background px-4 py-3 font-mono text-sm outline-none focus:bg-foreground focus:text-background";
+
 
   return (
     <div className="min-h-screen bg-background text-foreground">
