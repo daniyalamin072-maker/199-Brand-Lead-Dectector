@@ -25,14 +25,16 @@ const SUFFIX: Record<string, string[]> = {
 };
 const STREETS = ["Main St", "Oak Ave", "Market St", "Elm Rd", "Park Blvd", "King St", "River Dr"];
 
+const pick = <T,>(a: readonly T[]): T => a[Math.floor(Math.random() * a.length)] as T;
+
 function generate(city: string, country: string, niche: string): Lead[] {
   const n = 8 + Math.floor(Math.random() * 10);
   const statuses: Lead["website"][] = ["Active", "None", "Outdated"];
   return Array.from({ length: n }, () => ({
-    name: `${PREFIX[Math.floor(Math.random() * PREFIX.length)]} ${SUFFIX[niche][Math.floor(Math.random() * 3)]}`,
+    name: `${pick(PREFIX)} ${pick(SUFFIX[niche] ?? ["Services"])}`,
     phone: `+1 (${200 + Math.floor(Math.random() * 700)}) ${100 + Math.floor(Math.random() * 900)}-${1000 + Math.floor(Math.random() * 9000)}`,
-    address: `${10 + Math.floor(Math.random() * 990)} ${STREETS[Math.floor(Math.random() * STREETS.length)]}, ${city}, ${country}`,
-    website: statuses[Math.floor(Math.random() * 3)],
+    address: `${10 + Math.floor(Math.random() * 990)} ${pick(STREETS)}, ${city}, ${country}`,
+    website: pick(statuses),
   }));
 }
 
