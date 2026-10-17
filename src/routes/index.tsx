@@ -17,13 +17,15 @@ export const Route = createFileRoute("/")({
 });
 
 type Lead = { name: string; phone: string; address: string; website: "None" };
-const NICHES = ["Plumbing", "Roofing", "HVAC"] as const;
+export const NICHES = ["Plumbing", "HVAC", "Landscaping", "Roofing & Electrician"] as const;
 const PREFIX = ["Apex", "Prime", "Summit", "Reliable", "Metro", "Blue Line", "Ironclad", "Northstar", "Peak", "Allied", "Express", "Precision"];
 const SUFFIX: Record<string, string[]> = {
   Plumbing: ["Plumbing Co.", "Pipe Works", "Drain Pros"],
-  Roofing: ["Roofing", "Roof Masters", "Shingle Co."],
   HVAC: ["Heating & Air", "HVAC Services", "Climate Control"],
+  Landscaping: ["Landscaping", "Lawn Care", "Garden & Tree Co."],
+  "Roofing & Electrician": ["Roofing & Electrician", "Roof & Electrical Co.", "Volt & Shingle Bros."],
 };
+
 const STREETS = ["Main St", "Oak Ave", "Market St", "Elm Rd", "Park Blvd", "King St", "River Dr"];
 
 const pick = <T,>(a: readonly T[]): T => a[Math.floor(Math.random() * a.length)] as T;
