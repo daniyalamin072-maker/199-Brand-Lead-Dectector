@@ -16,7 +16,7 @@ export const Route = createFileRoute("/")({
   component: Index,
 });
 
-type Lead = { name: string; phone: string; address: string; website: "Active" | "None" | "Outdated" };
+type Lead = { name: string; phone: string; address: string; website: "None" };
 const NICHES = ["Plumbing", "Roofing", "HVAC"] as const;
 const PREFIX = ["Apex", "Prime", "Summit", "Reliable", "Metro", "Blue Line", "Ironclad", "Northstar", "Peak", "Allied", "Express", "Precision"];
 const SUFFIX: Record<string, string[]> = {
@@ -28,16 +28,16 @@ const STREETS = ["Main St", "Oak Ave", "Market St", "Elm Rd", "Park Blvd", "King
 
 const pick = <T,>(a: readonly T[]): T => a[Math.floor(Math.random() * a.length)] as T;
 
-function generate(city: string, country: string, niche: string): Lead[] {
+export function generate(city: string, country: string, niche: string): Lead[] {
   const n = 8 + Math.floor(Math.random() * 10);
-  const statuses: Lead["website"][] = ["Active", "None", "Outdated"];
   return Array.from({ length: n }, () => ({
     name: `${pick(PREFIX)} ${pick(SUFFIX[niche] ?? ["Services"])}`,
     phone: `+1 (${200 + Math.floor(Math.random() * 700)}) ${100 + Math.floor(Math.random() * 900)}-${1000 + Math.floor(Math.random() * 9000)}`,
     address: `${10 + Math.floor(Math.random() * 990)} ${pick(STREETS)}, ${city}, ${country}`,
-    website: pick(statuses),
+    website: "None" as const,
   }));
 }
+
 
 function Index() {
   const [city, setCity] = useState("");
@@ -57,12 +57,14 @@ function Index() {
   };
 
   const copy = async (l: Lead, i: number) => {
-    await navigator.clipboard.writeText(`${l.name}\n${l.phone}\n${l.address}\nWebsite: ${l.website}`);
+    await navigator.clipboard.writeText(`${l.name}\n${l.phone}\n${l.address}\nWebsite: None`);
     setCopied(i);
     setTimeout(() => setCopied(null), 1500);
   };
 
+  const visible = leads.filter((l) => l.website === "None");
   const input = "w-full border-2 border-foreground bg-background px-4 py-3 font-mono text-sm outline-none focus:bg-foreground focus:text-background";
+
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -93,20 +95,17 @@ function Index() {
           </button>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-3">
+        <section className="grid gap-4 md:grid-cols-2">
           <div className="border-2 border-foreground bg-foreground p-6 text-background">
             <p className="font-mono text-xs uppercase tracking-widest">Total Leads Found</p>
-            <p className="mt-2 text-6xl font-black tracking-tighter">{leads.length}</p>
+            <p className="mt-2 text-6xl font-black tracking-tighter">{visible.length}</p>
           </div>
           <div className="border-2 border-foreground p-6">
             <p className="font-mono text-xs uppercase tracking-widest">No Website</p>
-            <p className="mt-2 text-6xl font-black tracking-tighter">{leads.filter((l) => l.website === "None").length}</p>
-          </div>
-          <div className="border-2 border-foreground p-6">
-            <p className="font-mono text-xs uppercase tracking-widest">Outdated Site</p>
-            <p className="mt-2 text-6xl font-black tracking-tighter">{leads.filter((l) => l.website === "Outdated").length}</p>
+            <p className="mt-2 text-6xl font-black tracking-tighter">{visible.length}</p>
           </div>
         </section>
+
 
         <section className="border-2 border-foreground overflow-x-auto">
           <table className="w-full text-left text-sm">
@@ -119,13 +118,13 @@ function Index() {
               {leads.length === 0 && (
                 <tr><td colSpan={5} className="p-10 text-center font-mono text-muted-foreground">Enter a city, country and niche, then hit Generate Leads.</td></tr>
               )}
-              {leads.map((l, i) => (
+              {visible.map((l, i) => (
                 <tr key={i} className="border-t-2 border-foreground">
                   <td className="p-4 font-bold">{l.name}</td>
                   <td className="p-4 font-mono">{l.phone}</td>
                   <td className="p-4">{l.address}</td>
                   <td className="p-4">
-                    <span className={`border-2 border-foreground px-2 py-1 font-mono text-xs uppercase ${l.website === "None" ? "bg-foreground text-background" : ""}`}>{l.website}</span>
+                    <span className="border-2 border-foreground bg-foreground text-background px-2 py-1 font-mono text-xs uppercase">No Website</span>
                   </td>
                   <td className="p-4 text-right">
                     <button onClick={() => copy(l, i)} className="border-2 border-foreground px-3 py-1 font-mono text-xs uppercase hover:bg-foreground hover:text-background">
