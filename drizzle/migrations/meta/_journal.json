@@ -8,6 +8,13 @@
       "when": 1792254898852,
       "tag": "0000_create_contacted_leads",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1792255428040,
+      "tag": "0001_add_lead_quality_fields",
+      "breakpoints": true
     }
   ]
 }

@@ -18,30 +18,39 @@ export type Database = {
         Row: {
           address: string
           business_key: string
+          business_status: string | null
           contacted_at: string
+          google_rating: number | null
           id: string
           name: string
           phone: string
+          review_count: number | null
           user_id: string
           website: string
         }
         Insert: {
           address: string
           business_key: string
+          business_status?: string | null
           contacted_at?: string
+          google_rating?: number | null
           id?: string
           name: string
           phone: string
+          review_count?: number | null
           user_id?: string
           website?: string
         }
         Update: {
           address?: string
           business_key?: string
+          business_status?: string | null
           contacted_at?: string
+          google_rating?: number | null
           id?: string
           name?: string
           phone?: string
+          review_count?: number | null
           user_id?: string
           website?: string
         }

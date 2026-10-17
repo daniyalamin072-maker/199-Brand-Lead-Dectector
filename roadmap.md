@@ -1,4 +1,6 @@
 # Contacted leads
+- [x] Enforce rating 4.0+, reviews 20+, and ACTIVE for generated and displayed leads; preserve legacy contacted exclusions.
+- [x] Test quality thresholds and missing data.
 - [x] Save contacted businesses privately in Cloud.
 - [x] Add row completion, bulk completion, and history tab.
 - [x] Exclude contacted and duplicate businesses during generation.
