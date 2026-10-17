@@ -29,7 +29,7 @@ const STREETS = ["Main St", "Oak Ave", "Market St", "Elm Rd", "Park Blvd", "King
 const pick = <T,>(a: readonly T[]): T => a[Math.floor(Math.random() * a.length)] as T;
 
 export function generate(city: string, country: string, niche: string): Lead[] {
-  const n = 8 + Math.floor(Math.random() * 10);
+  const n = 120 + Math.floor(Math.random() * 60);
   return Array.from({ length: n }, () => ({
     name: `${pick(PREFIX)} ${pick(SUFFIX[niche] ?? ["Services"])}`,
     phone: `+1 (${200 + Math.floor(Math.random() * 700)}) ${100 + Math.floor(Math.random() * 900)}-${1000 + Math.floor(Math.random() * 9000)}`,
