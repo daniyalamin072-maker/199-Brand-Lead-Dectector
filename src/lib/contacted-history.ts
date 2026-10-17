@@ -1,0 +1,24 @@
+import { supabase } from "@/integrations/supabase/client";
+import { businessKey, type Lead, type ContactedLead } from "@/lib/leads";
+
+export async function readHistory(userId: string): Promise<ContactedLead[]> {
+  const rows: ContactedLead[] = [];
+  for (let offset = 0; ; offset += 1000) {
+    const { data, error } = await supabase.from("contacted_leads")
+      .select("business_key,name,phone,address,website,contacted_at")
+      .eq("user_id", userId).order("contacted_at", { ascending: false }).order("id")
+      .range(offset, offset + 999);
+    if (error) throw error;
+    for (const row of data ?? []) rows.push({ ...row, website: "None" });
+    if ((data?.length ?? 0) < 1000) return rows;
+  }
+}
+
+export async function saveContacted(userId: string, leads: Lead[]) {
+  const unique = new Map(leads.map(lead => [businessKey(lead), lead]));
+  const { error } = await supabase.from("contacted_leads").upsert(
+    [...unique].map(([business_key, lead]) => ({ ...lead, business_key, user_id: userId })),
+    { onConflict: "user_id,business_key", ignoreDuplicates: true },
+  );
+  if (error) throw error;
+}
