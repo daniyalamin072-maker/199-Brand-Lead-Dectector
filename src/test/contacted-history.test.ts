@@ -8,7 +8,7 @@ vi.mock("@/integrations/supabase/client", () => ({
 }));
 import { readHistory, saveContacted } from "@/lib/contacted-history";
 import { businessKey } from "@/lib/leads";
-const lead = { name: "Apex Plumbing", phone: "+1 2345678900", address: "10 Main St, Austin, USA", website: "None" as const };
+const lead = { name: "Apex Plumbing", phone: "+1 2345678900", address: "10 Main St, Austin, USA", website: "None" as const, google_rating: 4.0, review_count: 20, business_status: "ACTIVE" };
 describe("Contacted history persistence", () => {
   beforeEach(() => {
     vi.resetAllMocks();
@@ -36,5 +36,11 @@ describe("Contacted history persistence", () => {
   it("reports unsuccessful saves so active leads are not falsely removed", async () => {
     mocks.upsert.mockResolvedValue({ error: new Error("Save unavailable") });
     await expect(saveContacted("owner", [lead])).rejects.toThrow("Save unavailable");
+  });
+  it("does not save a lead that fails any quality condition", async () => {
+    for (const invalid of [{ ...lead, google_rating: 3.9 }, { ...lead, review_count: 19 }, { ...lead, business_status: "CLOSED" }]) {
+      await expect(saveContacted("owner", [invalid])).rejects.toThrow("quality requirements");
+    }
+    expect(mocks.upsert).not.toHaveBeenCalled();
   });
 });

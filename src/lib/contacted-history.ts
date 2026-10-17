@@ -1,11 +1,11 @@
 import { supabase } from "@/integrations/supabase/client";
-import { businessKey, type Lead, type ContactedLead } from "@/lib/leads";
+import { businessKey, displayableLeads, type Lead, type ContactedLead } from "@/lib/leads";
 
 export async function readHistory(userId: string): Promise<ContactedLead[]> {
   const rows: ContactedLead[] = [];
   for (let offset = 0; ; offset += 1000) {
     const { data, error } = await supabase.from("contacted_leads")
-      .select("business_key,name,phone,address,website,contacted_at")
+      .select("business_key,name,phone,address,website,contacted_at,google_rating,review_count,business_status")
       .eq("user_id", userId).order("contacted_at", { ascending: false }).order("id")
       .range(offset, offset + 999);
     if (error) throw error;
@@ -15,6 +15,7 @@ export async function readHistory(userId: string): Promise<ContactedLead[]> {
 }
 
 export async function saveContacted(userId: string, leads: Lead[]) {
+  if (displayableLeads(leads).length !== leads.length) throw new Error("Lead does not meet quality requirements");
   const unique = new Map(leads.map(lead => [businessKey(lead), lead]));
   const { error } = await supabase.from("contacted_leads").upsert(
     [...unique].map(([business_key, lead]) => ({ ...lead, business_key, user_id: userId })),

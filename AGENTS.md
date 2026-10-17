@@ -10,5 +10,6 @@
 <!-- LOVABLE:END -->
 
 - Keep lead identity, mock generation, and deduplication in a shared pure module so business identity stays stable across searches and is independently testable.
+- Apply shared fail-closed quality validation to generated candidates, visible lists, and history writes; retain unqualified legacy history solely for duplicate exclusion without inventing missing quality data.
 - Store contacted history in Cloud with owner-scoped read/insert policies and unique per-user business keys; read all pages before generation to prevent history truncation from resurfacing completed leads.
 - Keep the home page public with inline social sign-in for saving history; mount one session provider in the root and never expose one account's history to another.

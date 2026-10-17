@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useSession } from "@/components/session-provider";
 import { lovable } from "@/integrations/lovable";
 import { supabase } from "@/integrations/supabase/client";
-import { activeLeads, businessKey, generate, NICHES, type Lead } from "@/lib/leads";
+import { activeLeads, businessKey, displayableLeads, generate, NICHES, type Lead } from "@/lib/leads";
 import { readHistory, saveContacted } from "@/lib/contacted-history";
 import "@lovable.dev/cloud-auth-js/styles.css";
 export { generate, NICHES } from "@/lib/leads";
@@ -47,7 +47,8 @@ function Index() {
   const history = user ? historyQuery.data ?? [] : [];
   useEffect(() => { setLeads([]); setError(""); setNeedsSignIn(false); }, [user?.id]);
   const visible = activeLeads(leads, history);
-  const displayed = tab === "active" ? visible : history;
+  const qualifiedHistory = displayableLeads(history);
+  const displayed = tab === "active" ? visible : qualifiedHistory;
   const input = "w-full border-2 border-foreground bg-background px-4 py-3 font-mono text-sm outline-none focus:bg-foreground focus:text-background";
   const action = "rounded-none border-2 border-foreground bg-background text-foreground shadow-none hover:bg-foreground hover:text-background font-mono uppercase";
 
@@ -118,7 +119,7 @@ function Index() {
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div role="tablist" aria-label="Lead lists" className="flex flex-wrap gap-2">
             <Button role="tab" aria-selected={tab === "active"} onClick={() => setTab("active")} className={`${action} ${tab === "active" ? "bg-foreground text-background" : ""}`}>Generate Leads ({visible.length})</Button>
-            <Button role="tab" aria-selected={tab === "contacted"} onClick={() => setTab("contacted")} className={`${action} ${tab === "contacted" ? "bg-foreground text-background" : ""}`}>Contacted Leads ({history.length})</Button>
+            <Button role="tab" aria-selected={tab === "contacted"} onClick={() => setTab("contacted")} className={`${action} ${tab === "contacted" ? "bg-foreground text-background" : ""}`}>Contacted Leads ({qualifiedHistory.length})</Button>
           </div>
           {tab === "active" && <Button variant="outline" className={action} disabled={busy || visible.length === 0} onClick={() => markDone(visible)}><CheckCheck />Mark All as Done</Button>}
         </div>
