@@ -15,7 +15,7 @@ describe("Lead generation", () => {
   });
 
   it("offers every home-service niche and names businesses for each", () => {
-    expect(NICHES).toEqual(["Plumbing", "HVAC", "Landscaping", "Roofing & Electrician"]);
+    expect(NICHES).toEqual(["Plumbing", "HVAC", "Landscaping", "Roofing", "Electrician"]);
 
     for (const niche of NICHES) {
       const leads = generate("Austin", "USA", niche);

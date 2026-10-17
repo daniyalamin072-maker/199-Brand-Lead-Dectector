@@ -17,13 +17,14 @@ export const Route = createFileRoute("/")({
 });
 
 type Lead = { name: string; phone: string; address: string; website: "None" };
-export const NICHES = ["Plumbing", "HVAC", "Landscaping", "Roofing & Electrician"] as const;
+export const NICHES = ["Plumbing", "HVAC", "Landscaping", "Roofing", "Electrician"] as const;
 const PREFIX = ["Apex", "Prime", "Summit", "Reliable", "Metro", "Blue Line", "Ironclad", "Northstar", "Peak", "Allied", "Express", "Precision"];
 const SUFFIX: Record<string, string[]> = {
   Plumbing: ["Plumbing Co.", "Pipe Works", "Drain Pros"],
   HVAC: ["Heating & Air", "HVAC Services", "Climate Control"],
   Landscaping: ["Landscaping", "Lawn Care", "Garden & Tree Co."],
-  "Roofing & Electrician": ["Roofing & Electrician", "Roof & Electrical Co.", "Volt & Shingle Bros."],
+  Roofing: ["Roofing Co.", "Roof & Gutter Pros", "Shingle Works"],
+  Electrician: ["Electric Co.", "Electrical Services", "Volt Masters"],
 };
 
 const STREETS = ["Main St", "Oak Ave", "Market St", "Elm Rd", "Park Blvd", "King St", "River Dr"];
