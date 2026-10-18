@@ -7,3 +7,4 @@
 - [x] Test completion rules, persistence functions, regeneration, and signed-out controls.
 - [ ] Verify signed-in saving and reload through the live page — blocked until the first user signs in.
 - [x] Add a Maps Link column opening a Google Maps search for each lead.
+- [x] Make Maps Link open its own browser window, including inside an embedded preview frame.
