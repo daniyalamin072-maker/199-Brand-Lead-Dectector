@@ -147,7 +147,7 @@ function Index() {
                 <td className="p-4 font-bold">{lead.name}</td><td className="p-4 font-mono whitespace-nowrap">{lead.phone}</td><td className="p-4">{lead.address}</td>
                 <td className="p-4"><span className="inline-block whitespace-nowrap border-2 border-foreground bg-foreground text-background px-2 py-1 font-mono text-xs uppercase">No Website</span></td>
                 {tab === "contacted" && <td className="p-4 whitespace-nowrap font-mono text-xs">{"contacted_at" in lead && typeof lead.contacted_at === "string" ? new Date(lead.contacted_at).toLocaleDateString() : ""}</td>}
-                <td className="p-4 whitespace-nowrap"><a href={mapsUrl(lead)} target="_blank" rel="noopener noreferrer" title="Open this business on Google Maps" className={`${action} inline-flex items-center gap-2 px-2 py-1 text-xs`}><ExternalLink className="h-4 w-4" />Maps Link</a></td>
+                <td className="p-4 whitespace-nowrap"><a href={mapsUrl(lead)} target="_blank" rel="noopener noreferrer" onClick={e => openMaps(e, lead)} title="Open this business in a new Google Maps window" className={`${action} inline-flex items-center gap-2 px-2 py-1 text-xs`}><ExternalLink className="h-4 w-4" />Maps Link</a></td>
                 <td className="p-4"><div className="flex flex-col items-end gap-2">
                   <Button variant="outline" size="sm" onClick={() => copy(lead)} className={action}><Copy />{copied === businessKey(lead) ? "Copied" : "Copy Lead"}</Button>
                   {tab === "active" && <Button variant="outline" size="sm" disabled={busy} onClick={() => markDone([lead])} className={action}><Check />Mark as Done</Button>}
