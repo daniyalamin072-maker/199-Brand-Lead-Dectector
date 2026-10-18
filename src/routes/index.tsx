@@ -1,13 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, CheckCheck, Copy, LogOut } from "lucide-react";
+import { Check, CheckCheck, Copy, ExternalLink, LogOut } from "lucide-react";
 import logo from "@/assets/199-logo.jpg.asset.json";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/components/session-provider";
 import { lovable } from "@/integrations/lovable";
 import { supabase } from "@/integrations/supabase/client";
-import { activeLeads, businessKey, displayableLeads, generate, NICHES, type Lead } from "@/lib/leads";
+import { activeLeads, businessKey, displayableLeads, generate, mapsUrl, NICHES, type Lead } from "@/lib/leads";
 import { readHistory, saveContacted } from "@/lib/contacted-history";
 import "@lovable.dev/cloud-auth-js/styles.css";
 export { generate, NICHES } from "@/lib/leads";
@@ -130,13 +130,14 @@ function Index() {
         {(error || historyQuery.isError) && <div role="alert" className="border-2 border-foreground p-4 text-sm"><p>{error || "Could not load contacted history. Please try again."}</p>{historyQuery.isError && <Button variant="outline" className={`${action} mt-3`} onClick={() => historyQuery.refetch()}>Retry history</Button>}</div>}
         <section role="tabpanel" aria-label={tab === "active" ? "Generate Leads" : "Contacted Leads"} className="border-2 border-foreground overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="bg-foreground text-background font-mono text-xs uppercase tracking-widest"><tr><th className="p-4">Business</th><th className="p-4">Phone</th><th className="p-4">Address</th><th className="p-4">Website</th>{tab === "contacted" && <th className="p-4">Contacted</th>}<th className="p-4">Actions</th></tr></thead>
+            <thead className="bg-foreground text-background font-mono text-xs uppercase tracking-widest"><tr><th className="p-4">Business</th><th className="p-4">Phone</th><th className="p-4">Address</th><th className="p-4">Website</th>{tab === "contacted" && <th className="p-4">Contacted</th>}<th className="p-4">Maps Link</th><th className="p-4">Actions</th></tr></thead>
             <tbody>
-              {displayed.length === 0 && <tr><td colSpan={tab === "contacted" ? 6 : 5} className="p-10 text-center font-mono text-muted-foreground">{tab === "contacted" ? (user && historyQuery.isPending ? "Loading contacted leads…" : "No contacted leads yet.") : "No active leads."}</td></tr>}
+              {displayed.length === 0 && <tr><td colSpan={tab === "contacted" ? 7 : 6} className="p-10 text-center font-mono text-muted-foreground">{tab === "contacted" ? (user && historyQuery.isPending ? "Loading contacted leads…" : "No contacted leads yet.") : "No active leads."}</td></tr>}
               {displayed.map(lead => <tr key={businessKey(lead)} className="border-t-2 border-foreground">
                 <td className="p-4 font-bold">{lead.name}</td><td className="p-4 font-mono whitespace-nowrap">{lead.phone}</td><td className="p-4">{lead.address}</td>
                 <td className="p-4"><span className="inline-block whitespace-nowrap border-2 border-foreground bg-foreground text-background px-2 py-1 font-mono text-xs uppercase">No Website</span></td>
                 {tab === "contacted" && <td className="p-4 whitespace-nowrap font-mono text-xs">{"contacted_at" in lead && typeof lead.contacted_at === "string" ? new Date(lead.contacted_at).toLocaleDateString() : ""}</td>}
+                <td className="p-4 whitespace-nowrap"><a href={mapsUrl(lead)} target="_blank" rel="noopener noreferrer" title="Open this business on Google Maps" className={`${action} inline-flex items-center gap-2 px-2 py-1 text-xs`}><ExternalLink className="h-4 w-4" />Maps Link</a></td>
                 <td className="p-4"><div className="flex flex-col items-end gap-2">
                   <Button variant="outline" size="sm" onClick={() => copy(lead)} className={action}><Copy />{copied === businessKey(lead) ? "Copied" : "Copy Lead"}</Button>
                   {tab === "active" && <Button variant="outline" size="sm" disabled={busy} onClick={() => markDone([lead])} className={action}><Check />Mark as Done</Button>}
