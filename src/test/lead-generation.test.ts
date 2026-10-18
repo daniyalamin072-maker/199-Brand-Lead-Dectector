@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { activeLeads, businessKey, displayableLeads, generate, meetsQuality, NICHES } from "@/lib/leads";
+import { activeLeads, businessKey, displayableLeads, generate, mapsUrl, meetsQuality, NICHES } from "@/lib/leads";
 
 // The dashboard must only ever surface businesses that have no website at all,
 // one click has to return a deep list of them, and the niche picker has to cover
