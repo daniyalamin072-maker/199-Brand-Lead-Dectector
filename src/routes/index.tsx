@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, CheckCheck, Copy, ExternalLink, LogOut } from "lucide-react";
 import logo from "@/assets/199-logo.jpg.asset.json";
@@ -98,6 +98,16 @@ function Index() {
     await queryClient.cancelQueries(); queryClient.clear(); setLeads([]);
     const { error: failure } = await supabase.auth.signOut();
     if (failure) setError("Could not sign out. Please try again.");
+  }
+  // A plain new-tab link is correct on a normal page, but can be trapped inside an
+  // embedded preview frame, where Google Maps refuses to display. Force a real window.
+  function openMaps(event: MouseEvent<HTMLAnchorElement>, lead: Lead) {
+    if (window.self === window.top) return;
+    event.preventDefault();
+    const url = mapsUrl(lead);
+    if (window.open(url, "_blank", "noopener,noreferrer")) return;
+    try { window.top.location.href = url; }
+    catch { setError("Google Maps could not open in a new window. Right-click the Maps Link and choose Open link in new tab."); }
   }
   return (
     <div className="min-h-screen bg-background text-foreground">
