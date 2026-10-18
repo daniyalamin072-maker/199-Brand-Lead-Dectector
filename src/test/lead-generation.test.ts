@@ -92,4 +92,14 @@ describe("Lead generation", () => {
     expect(displayableLeads([legacy])).toEqual([]);
     expect(activeLeads([qualityLead], [legacy])).toEqual([]);
   });
+  it("builds a Google Maps search link from the business name, address, city and country", () => {
+    const lead = { ...qualityLead, address: "10 Main St, Austin, USA" };
+    expect(mapsUrl(lead)).toBe("https://www.google.com/maps/search/?api=1&query=Quality%20Plumbing%2C%2010%20Main%20St%2C%20Austin%2C%20USA");
+    const generated = generate("Austin", "USA", "Plumbing")[0];
+    if (!generated) throw new Error("Expected a lead");
+    const query = new URL(mapsUrl(generated)).searchParams.get("query") ?? "";
+    expect(mapsUrl(generated).startsWith("https://www.google.com/maps/search/?api=1&query=")).toBe(true);
+    expect(query).toContain(generated.name);
+    expect(query).toContain("Austin, USA");
+  });
 });
