@@ -100,14 +100,15 @@ function Index() {
     if (failure) setError("Could not sign out. Please try again.");
   }
   // A plain new-tab link is correct on a normal page, but can be trapped inside an
-  // embedded preview frame, where Google Maps refuses to display. Force a real window.
+  // embedded preview frame, where Google Maps refuses to display. Force a real window
+  // and never navigate the surrounding page.
   function openMaps(event: MouseEvent<HTMLAnchorElement>, lead: Lead) {
     if (window.self === window.top) return;
     event.preventDefault();
-    const url = mapsUrl(lead);
-    if (window.open(url, "_blank", "noopener,noreferrer")) return;
-    try { window.top.location.href = url; }
-    catch { setError("Google Maps could not open in a new window. Right-click the Maps Link and choose Open link in new tab."); }
+    const popup = window.open("", "_blank");
+    if (!popup) { setError("Google Maps could not open in a new window. Right-click the Maps Link and choose Open link in new tab."); return; }
+    popup.opener = null;
+    popup.location.href = mapsUrl(lead);
   }
   return (
     <div className="min-h-screen bg-background text-foreground">
