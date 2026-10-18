@@ -1,13 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, CheckCheck, Copy, LogOut } from "lucide-react";
+import { Check, CheckCheck, Copy, ExternalLink, LogOut } from "lucide-react";
 import logo from "@/assets/199-logo.jpg.asset.json";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/components/session-provider";
 import { lovable } from "@/integrations/lovable";
 import { supabase } from "@/integrations/supabase/client";
-import { activeLeads, businessKey, displayableLeads, generate, NICHES, type Lead } from "@/lib/leads";
+import { activeLeads, businessKey, displayableLeads, generate, mapsUrl, NICHES, type Lead } from "@/lib/leads";
 import { readHistory, saveContacted } from "@/lib/contacted-history";
 import "@lovable.dev/cloud-auth-js/styles.css";
 export { generate, NICHES } from "@/lib/leads";

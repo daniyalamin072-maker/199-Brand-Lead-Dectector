@@ -12,6 +12,9 @@ const SUFFIX: Record<string, string[]> = {
 const STREETS = ["Main St", "Oak Ave", "Market St", "Elm Rd", "Park Blvd", "King St", "River Dr"];
 const normalize = (value: string) => value.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
 export const businessKey = (lead: Lead) => `${normalize(lead.name)}|${normalize(lead.address)}`;
+// Clickable Google Maps search built from the business name plus its street, city and country.
+export const mapsUrl = (lead: Lead) =>
+  `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(`${lead.name}, ${lead.address}`.trim())}`;
 export function meetsQuality(lead: Lead): boolean {
   return typeof lead.google_rating === "number" && Number.isFinite(lead.google_rating)
     && lead.google_rating >= 4.0 && lead.google_rating <= 5.0
