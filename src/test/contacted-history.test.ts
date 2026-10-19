@@ -26,7 +26,7 @@ describe("Contacted history persistence", () => {
   });
   it("stores completed leads once with their owner and stable business identity", async () => {
     mocks.upsert.mockResolvedValue({ error: null });
-    await saveContacted("owner", [lead, lead]);
+    await saveContacted("owner", [{ ...lead, place_id: "transient-place-id", city: "Austin" }, lead]);
     expect(mocks.upsert).toHaveBeenCalledWith([{ ...lead, business_key: businessKey(lead), user_id: "owner" }], { onConflict: "user_id,business_key", ignoreDuplicates: true });
   });
   it("rejects a failed history check instead of silently returning no exclusions", async () => {
