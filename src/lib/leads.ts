@@ -25,10 +25,10 @@ export const displayableLeads = <T extends Lead>(leads: T[]): T[] =>
 
 /** Raw Google Places (New) listing fields we request. */
 export type Place = {
-  id?: string; displayName?: { text?: string }; formattedAddress?: string;
+  id?: string | undefined; displayName?: { text?: string } | undefined; formattedAddress?: string;
   nationalPhoneNumber?: string; internationalPhoneNumber?: string; websiteUri?: string | null;
-  rating?: number; userRatingCount?: number; businessStatus?: string;
-  addressComponents?: { longText?: string; shortText?: string; types?: string[] }[];
+  rating?: number | undefined; userRatingCount?: number | undefined; businessStatus?: string | undefined;
+  addressComponents?: { longText?: string; shortText?: string; types?: string[] }[] | undefined;
 };
 export type SearchScope = { city: string; country: string };
 export function matchesLocation(place: Place, scope: SearchScope): boolean {
@@ -48,9 +48,10 @@ export function placeToLead(place: Place, scope?: SearchScope): Lead | null {
   const phone = (place.internationalPhoneNumber || place.nationalPhoneNumber || "").trim();
   const address = place.formattedAddress?.trim() ?? "";
   if (!name || !address || digits(phone).length < 6 || !place.id) return null;
+  const city = scope?.city ?? place.addressComponents?.find(p => p.types?.some(t => t === "locality" || t === "postal_town"))?.longText;
   const lead: Lead = {
     name, phone, address, website: "None", place_id: place.id,
-    city: scope?.city ?? place.addressComponents?.find(p => p.types?.some(t => t === "locality" || t === "postal_town"))?.longText,
+    ...(city ? { city } : {}),
     google_rating: typeof place.rating === "number" ? place.rating : null,
     review_count: typeof place.userRatingCount === "number" ? place.userRatingCount : null,
     business_status: place.businessStatus === "OPERATIONAL" ? "ACTIVE" : place.businessStatus ?? null,
