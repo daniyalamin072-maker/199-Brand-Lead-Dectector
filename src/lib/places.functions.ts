@@ -2,10 +2,10 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { activeLeads, NICHES, NICHE_QUERIES, placeToLead, type Lead, type Place } from "./leads";
+import { advancePageToken } from "./search-pagination";
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/google_maps";
 const FIELDS = ["id", "displayName", "formattedAddress", "addressComponents", "nationalPhoneNumber", "internationalPhoneNumber", "websiteUri", "rating", "userRatingCount", "businessStatus"];
-const MAX_PAGES = 3; // Google returns at most 60 results per query
 
 export const searchRealLeads = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -29,7 +29,8 @@ export const searchRealLeads = createServerFn({ method: "POST" })
     let scanned = 0;
     for (const phrase of NICHE_QUERIES[data.niche] ?? []) {
       let pageToken: string | undefined;
-      for (let page = 0; page < MAX_PAGES; page++) {
+      const usedTokens = new Set<string>();
+      do {
         const response = await fetch(`${GATEWAY_URL}/places/v1/places:searchText`, {
           method: "POST", headers,
           body: JSON.stringify({ textQuery: `${phrase} in ${data.city}, ${data.country}`, pageSize: 20, ...(pageToken ? { pageToken } : {}) }),
@@ -59,9 +60,12 @@ export const searchRealLeads = createServerFn({ method: "POST" })
            const lead = placeToLead(place, data);
           if (lead) leads.push(lead);
         }
-        pageToken = body.nextPageToken;
-        if (!pageToken) break;
-      }
+        try {
+          pageToken = advancePageToken(body.nextPageToken, usedTokens);
+        } catch (error) {
+          return { leads: activeLeads(leads, []), scanned, error: error instanceof Error ? error.message : "Google Maps pagination failed; showing partial results." };
+        }
+      } while (pageToken);
     }
     return { leads: activeLeads(leads, []), scanned };
   });
