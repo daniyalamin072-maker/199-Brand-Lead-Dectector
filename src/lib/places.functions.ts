@@ -1,10 +1,10 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
-import { NICHES, NICHE_QUERIES, placeToLead, type Lead, type Place } from "./leads";
+import { activeLeads, NICHES, NICHE_QUERIES, placeToLead, type Lead, type Place } from "./leads";
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/google_maps";
-const FIELDS = ["id", "displayName", "formattedAddress", "nationalPhoneNumber", "internationalPhoneNumber", "websiteUri", "rating", "userRatingCount", "businessStatus"];
+const FIELDS = ["id", "displayName", "formattedAddress", "addressComponents", "nationalPhoneNumber", "internationalPhoneNumber", "websiteUri", "rating", "userRatingCount", "businessStatus"];
 const MAX_PAGES = 3; // Google returns at most 60 results per query
 
 export const searchRealLeads = createServerFn({ method: "POST" })
@@ -35,19 +35,33 @@ export const searchRealLeads = createServerFn({ method: "POST" })
           body: JSON.stringify({ textQuery: `${phrase} in ${data.city}, ${data.country}`, pageSize: 20, ...(pageToken ? { pageToken } : {}) }),
         });
         if (!response.ok) {
-          console.error(`Places search failed [${response.status}]: ${await response.text()}`);
-          return { leads, scanned, error: leads.length ? "Google Maps stopped responding; showing what was verified so far." : `Google Maps search failed (${response.status}). Please try again.` };
+           const errorBody = await response.text();
+           console.error(`Places search failed [${response.status}]: ${errorBody}`);
+           if (response.status === 403) {
+             let reason = "";
+             try {
+               const failure = JSON.parse(errorBody) as { error?: { details?: { reason?: string }[] } };
+               reason = failure.error?.details?.find(d => d.reason)?.reason ?? "";
+             } catch { /* Non-JSON provider response. */ }
+             const error = reason === "API_KEY_HTTP_REFERRER_BLOCKED"
+               ? 'Google Maps server key is referrer-restricted. In Google Cloud Console, set the server key application restrictions to "None" or "IP addresses".'
+               : reason === "API_KEY_SERVICE_BLOCKED"
+                 ? 'Google Maps server key does not allow Places API (New). Enable it and add it to the server key allowed APIs in Google Cloud Console.'
+                 : 'Google Maps request was denied (403). Check the server key restrictions in Google Cloud Console.';
+             return { leads: activeLeads(leads, []), scanned, error };
+           }
+           return { leads: activeLeads(leads, []), scanned, error: leads.length ? "Google Maps stopped responding; showing matching listings received so far." : `Google Maps search failed (${response.status}). Please try again.` };
         }
         const body = await response.json() as { places?: Place[]; nextPageToken?: string };
         for (const place of body.places ?? []) {
           if (!place.id || seen.has(place.id)) continue;
           seen.add(place.id); scanned++;
-          const lead = placeToLead(place);
+           const lead = placeToLead(place, data);
           if (lead) leads.push(lead);
         }
         pageToken = body.nextPageToken;
         if (!pageToken) break;
       }
     }
-    return { leads, scanned };
+    return { leads: activeLeads(leads, []), scanned };
   });

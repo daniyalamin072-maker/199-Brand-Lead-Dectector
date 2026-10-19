@@ -1,16 +1,18 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { Check, CheckCheck, Copy, ExternalLink, LogOut } from "lucide-react";
 import logo from "@/assets/199-logo.jpg.asset.json";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/components/session-provider";
 import { lovable } from "@/integrations/lovable";
 import { supabase } from "@/integrations/supabase/client";
-import { activeLeads, businessKey, displayableLeads, generate, mapsUrl, NICHES, type Lead } from "@/lib/leads";
+import { activeLeads, businessKey, displayableLeads, mapsUrl, NICHES, type Lead } from "@/lib/leads";
+import { searchRealLeads } from "@/lib/places.functions";
 import { readHistory, saveContacted } from "@/lib/contacted-history";
 import "@lovable.dev/cloud-auth-js/styles.css";
-export { generate, NICHES } from "@/lib/leads";
+export { NICHES } from "@/lib/leads";
 
 export const Route = createFileRoute("/")({
   head: () => ({ meta: [
@@ -25,11 +27,12 @@ export const Route = createFileRoute("/")({
 });
 
 function Index() {
+  const search = useServerFn(searchRealLeads);
   const { user, ready } = useSession();
   const queryClient = useQueryClient();
   const [city, setCity] = useState("");
   const [country, setCountry] = useState("");
-  const [niche, setNiche] = useState<string>("Plumbing");
+  const [niche, setNiche] = useState<(typeof NICHES)[number]>("Plumbing");
   const [leads, setLeads] = useState<Lead[]>([]);
   const [tab, setTab] = useState<"active" | "contacted">("active");
   const [busy, setBusy] = useState(false);
@@ -37,6 +40,7 @@ function Index() {
   const [error, setError] = useState("");
   const [needsSignIn, setNeedsSignIn] = useState(false);
   const operation = useRef(false);
+  const searchVersion = useRef(0);
   const identity = useRef(user?.id);
   identity.current = user?.id;
   const historyQuery = useQuery({
@@ -45,7 +49,11 @@ function Index() {
     enabled: !!user,
   });
   const history = user ? historyQuery.data ?? [] : [];
-  useEffect(() => { setLeads([]); setError(""); setNeedsSignIn(false); }, [user?.id]);
+  useEffect(() => { searchVersion.current++; setLeads([]); setError(""); setNeedsSignIn(false); }, [user?.id]);
+  function clearSearch() {
+    searchVersion.current++;
+    setLeads([]); setError(""); setTab("active");
+  }
   const visible = activeLeads(leads, history);
   const qualifiedHistory = displayableLeads(history);
   const displayed = tab === "active" ? visible : qualifiedHistory;
@@ -59,16 +67,25 @@ function Index() {
   }
   async function run() {
     if (operation.current || !ready || !city.trim() || !country.trim()) return;
+    if (!user) { setNeedsSignIn(true); return; }
     operation.current = true; setBusy(true); setError("");
-    const owner = user?.id;
+    const owner = user.id;
+    const version = ++searchVersion.current;
+    const scope = { city: city.trim().slice(0, 80), country: country.trim().slice(0, 80), niche };
+    setLeads([]); setTab("active");
     try {
-      const latest = owner ? await readHistory(owner) : [];
-      if (identity.current !== owner) return;
-      if (owner) queryClient.setQueryData(["contacted-leads", owner], latest);
-      const next = generate(city.trim().slice(0, 80), country.trim().slice(0, 80), niche, latest);
+      const latest = await readHistory(owner);
+      if (identity.current !== owner || searchVersion.current !== version) return;
+      queryClient.setQueryData(["contacted-leads", owner], latest);
+      const result = await search({ data: scope });
+      if (identity.current !== owner || searchVersion.current !== version) return;
+      const next = activeLeads(result.leads, latest);
       setLeads(next); setTab("active");
-      if (next.length < 120) setError("No more uncontacted sample businesses are available for this search.");
-    } catch { setError("Could not check contacted history. No new leads were generated. Please try again."); }
+      if (result.error) setError(result.error);
+      else if (!next.length) setError("No uncontacted businesses matched every requirement in this city and country.");
+    } catch {
+      if (identity.current === owner && searchVersion.current === version) setError("Could not complete the search or check contacted history. Please try again.");
+    }
     finally { operation.current = false; setBusy(false); }
   }
   async function markDone(selected: Lead[]) {
@@ -118,9 +135,9 @@ function Index() {
           {user && <Button variant="outline" className={action} disabled={busy} onClick={signOut}><LogOut />Sign out</Button>}
         </div>
         <section className="grid gap-4 md:grid-cols-4 items-end">
-          <label className="space-y-2"><span className="font-mono text-xs uppercase tracking-widest">City</span><input className={input} value={city} maxLength={80} onChange={e => setCity(e.target.value)} placeholder="Austin" /></label>
-          <label className="space-y-2"><span className="font-mono text-xs uppercase tracking-widest">Country</span><input className={input} value={country} maxLength={80} onChange={e => setCountry(e.target.value)} placeholder="USA" /></label>
-          <label className="space-y-2"><span className="font-mono text-xs uppercase tracking-widest">Niche</span><select className={input} value={niche} onChange={e => setNiche(e.target.value)}>{NICHES.map(n => <option key={n}>{n}</option>)}</select></label>
+           <label className="space-y-2"><span className="font-mono text-xs uppercase tracking-widest">City</span><input className={input} value={city} maxLength={80} onChange={e => { clearSearch(); setCity(e.target.value); }} placeholder="Austin" /></label>
+           <label className="space-y-2"><span className="font-mono text-xs uppercase tracking-widest">Country</span><input className={input} value={country} maxLength={80} onChange={e => { clearSearch(); setCountry(e.target.value); }} placeholder="USA" /></label>
+           <label className="space-y-2"><span className="font-mono text-xs uppercase tracking-widest">Niche</span><select className={input} value={niche} onChange={e => { const next = NICHES.find(n => n === e.target.value); if (next) { clearSearch(); setNiche(next); } }}>{NICHES.map(n => <option key={n}>{n}</option>)}</select></label>
           <Button onClick={run} disabled={busy || !ready || !city.trim() || !country.trim()} className={`${action} h-auto py-3 bg-foreground text-background hover:bg-background hover:text-foreground font-bold`}>{busy ? "Working…" : "Generate Leads"}</Button>
         </section>
         <section className="grid gap-4 md:grid-cols-2">
@@ -135,7 +152,7 @@ function Index() {
           {tab === "active" && <Button variant="outline" className={action} disabled={busy || visible.length === 0} onClick={() => markDone(visible)}><CheckCheck />Mark All as Done</Button>}
         </div>
         {ready && !user && (tab === "contacted" || needsSignIn) && <section className="border-y-2 border-foreground py-5 space-y-4">
-          <p className="font-mono text-sm">Sign in to save and view your contacted leads.</p>
+           <p className="font-mono text-sm">Sign in to search Google Maps and save your contacted leads.</p>
           <div className="flex flex-wrap gap-3"><Button variant="outline" className={action} onClick={() => signIn("google")}>Continue with Google</Button><Button className="lovable-auth-button" onClick={() => signIn("lovable")}>Continue with Lovable</Button></div>
         </section>}
         {(error || historyQuery.isError) && <div role="alert" className="border-2 border-foreground p-4 text-sm"><p>{error || "Could not load contacted history. Please try again."}</p>{historyQuery.isError && <Button variant="outline" className={`${action} mt-3`} onClick={() => historyQuery.refetch()}>Retry history</Button>}</div>}
