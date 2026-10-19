@@ -1,4 +1,6 @@
 # Contacted leads
+- [ ] Replace broken mock imports with real authenticated Google Maps search; enforce location scope, quality, unique names/phones, and dynamic Maps URLs.
+- [ ] Run focused regression tests and verify non-Maps page interactions; live Google Maps verification requires an authorized deployed origin.
 - [x] Enforce rating 4.0+, reviews 20+, and ACTIVE for generated and displayed leads; preserve legacy contacted exclusions.
 - [x] Test quality thresholds and missing data.
 - [x] Save contacted businesses privately in Cloud.
