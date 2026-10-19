@@ -18,7 +18,11 @@ export async function saveContacted(userId: string, leads: Lead[]) {
   if (displayableLeads(leads).length !== leads.length) throw new Error("Lead does not meet quality requirements");
   const unique = new Map(leads.map(lead => [businessKey(lead), lead]));
   const { error } = await supabase.from("contacted_leads").upsert(
-    [...unique].map(([business_key, lead]) => ({ ...lead, business_key, user_id: userId })),
+    [...unique].map(([business_key, lead]) => ({
+      name: lead.name, phone: lead.phone, address: lead.address, website: lead.website,
+      google_rating: lead.google_rating, review_count: lead.review_count,
+      business_status: lead.business_status, business_key, user_id: userId,
+    })),
     { onConflict: "user_id,business_key", ignoreDuplicates: true },
   );
   if (error) throw error;
