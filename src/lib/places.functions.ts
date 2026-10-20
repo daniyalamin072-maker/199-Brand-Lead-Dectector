@@ -2,7 +2,9 @@ import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { activeLeads, NICHES, NICHE_QUERIES, placeToLead, type Lead, type Place } from "./leads";
-import { advancePageToken } from "./search-pagination";
+import { advancePageToken, reachedRawCap } from "./search-pagination";
+
+const REQUEST_TIMEOUT_MS = 10_000;
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/google_maps";
 const FIELDS = ["id", "displayName", "formattedAddress", "addressComponents", "nationalPhoneNumber", "internationalPhoneNumber", "websiteUri", "rating", "userRatingCount", "businessStatus"];
@@ -31,10 +33,15 @@ export const searchRealLeads = createServerFn({ method: "POST" })
       let pageToken: string | undefined;
       const usedTokens = new Set<string>();
       do {
-        const response = await fetch(`${GATEWAY_URL}/places/v1/places:searchText`, {
-          method: "POST", headers,
-          body: JSON.stringify({ textQuery: `${phrase} in ${data.city}, ${data.country}`, pageSize: 20, ...(pageToken ? { pageToken } : {}) }),
-        });
+        let response: Response;
+        try {
+          response = await fetch(`${GATEWAY_URL}/places/v1/places:searchText`, {
+            method: "POST", headers, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+            body: JSON.stringify({ textQuery: `${phrase} in ${data.city}, ${data.country}`, pageSize: 20, ...(pageToken ? { pageToken } : {}) }),
+          });
+        } catch {
+          return { leads: activeLeads(leads, []), scanned, error: leads.length ? "Google Maps took too long; showing matching listings received so far." : "Google Maps took too long to respond. Please try again." };
+        }
         if (!response.ok) {
            const errorBody = await response.text();
            console.error(`Places search failed [${response.status}]: ${errorBody}`);
