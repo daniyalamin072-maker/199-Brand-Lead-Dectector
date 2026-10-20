@@ -38,7 +38,7 @@ describe("Contacted history persistence", () => {
     await expect(saveContacted("owner", [lead])).rejects.toThrow("Save unavailable");
   });
   it("does not save a lead that fails any quality condition", async () => {
-    for (const invalid of [{ ...lead, google_rating: 3.9 }, { ...lead, review_count: 19 }, { ...lead, business_status: "CLOSED" }]) {
+    for (const invalid of [{ ...lead, google_rating: 3.9 }, { ...lead, review_count: 4 }, { ...lead, business_status: "CLOSED" }]) {
       await expect(saveContacted("owner", [invalid])).rejects.toThrow("quality requirements");
     }
     expect(mocks.upsert).not.toHaveBeenCalled();
