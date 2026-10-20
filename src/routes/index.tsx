@@ -85,7 +85,6 @@ function Index() {
       const next = activeLeads(result.leads, latest);
       setLeads(next); setTab("active");
       if (result.error) setError(result.error);
-      else if (!next.length) setError("No uncontacted businesses matched every requirement in this city and country.");
     } catch {
       if (identity.current === owner && searchVersion.current === version) setError("Could not complete the search or check contacted history. Please try again.");
     }
@@ -163,7 +162,7 @@ function Index() {
           <table className="w-full text-left text-sm">
             <thead className="bg-foreground text-background font-mono text-xs uppercase tracking-widest"><tr><th className="p-4">Business</th><th className="p-4">Phone</th><th className="p-4">Address</th><th className="p-4">Website</th>{tab === "contacted" && <th className="p-4">Contacted</th>}<th className="p-4">Maps Link</th><th className="p-4">Actions</th></tr></thead>
             <tbody>
-              {displayed.length === 0 && <tr><td colSpan={tab === "contacted" ? 7 : 6} className="p-10 text-center font-mono text-muted-foreground">{tab === "contacted" ? (user && historyQuery.isPending ? "Loading contacted leads…" : "No contacted leads yet.") : "No active leads."}</td></tr>}
+              {displayed.length === 0 && tab === "contacted" && <tr><td colSpan={7} className="p-10 text-center font-mono text-muted-foreground">{user && historyQuery.isPending ? "Loading contacted leads…" : "No contacted leads yet."}</td></tr>}
               {displayed.map(lead => <tr key={businessKey(lead)} className="border-t-2 border-foreground">
                 <td className="p-4 font-bold">{lead.name}</td><td className="p-4 font-mono whitespace-nowrap">{lead.phone}</td><td className="p-4">{lead.address}</td>
                 <td className="p-4"><span className="inline-block whitespace-nowrap border-2 border-foreground bg-foreground text-background px-2 py-1 font-mono text-xs uppercase">No Website</span></td>

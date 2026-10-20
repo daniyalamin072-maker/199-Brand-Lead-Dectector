@@ -36,9 +36,10 @@ describe("Real lead validation", () => {
     expect(activeLeads([{ ...qualityLead, google_rating: 3.99 }], [])).toEqual([]);
     expect(meetsQuality({ ...qualityLead, google_rating: 5 })).toBe(true);
   });
-  it("requires at least 20 reviews", () => {
-    expect(placeToLead({ ...place, userRatingCount: 19 })).toBeNull();
-    expect(activeLeads([{ ...qualityLead, review_count: 19 }], [])).toEqual([]);
+  it("requires at least 5 reviews", () => {
+    expect(placeToLead({ ...place, userRatingCount: 4 })).toBeNull();
+    expect(activeLeads([{ ...qualityLead, review_count: 4 }], [])).toEqual([]);
+    expect(meetsQuality({ ...qualityLead, review_count: 5 })).toBe(true);
     expect(meetsQuality(qualityLead)).toBe(true);
   });
   it("requires exact ACTIVE status on displayed leads", () => {
@@ -51,7 +52,7 @@ describe("Real lead validation", () => {
   });
   it("fails closed for missing or invalid quality and identity fields", () => {
     for (const google_rating of [null, NaN, Infinity, 5.1]) expect(meetsQuality({ ...qualityLead, google_rating })).toBe(false);
-    for (const review_count of [null, NaN, Infinity, 20.5]) expect(meetsQuality({ ...qualityLead, review_count })).toBe(false);
+    for (const review_count of [null, NaN, Infinity, 5.5]) expect(meetsQuality({ ...qualityLead, review_count })).toBe(false);
     expect(meetsQuality({ ...qualityLead, business_status: null })).toBe(false);
     for (const invalid of [{ ...place, id: undefined }, { ...place, displayName: undefined }, { ...place, formattedAddress: "" }, { ...place, internationalPhoneNumber: "123" }, { ...place, rating: undefined }, { ...place, userRatingCount: undefined }]) expect(placeToLead(invalid)).toBeNull();
   });
