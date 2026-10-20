@@ -18,7 +18,7 @@ export function meetsQuality(lead: Lead): boolean {
   return typeof lead.google_rating === "number" && Number.isFinite(lead.google_rating)
     && lead.google_rating >= 4.0 && lead.google_rating <= 5.0
     && typeof lead.review_count === "number" && Number.isSafeInteger(lead.review_count)
-    && lead.review_count >= 5 && lead.business_status === "ACTIVE";
+    && lead.review_count >= 15 && lead.business_status === "ACTIVE";
 }
 export const displayableLeads = <T extends Lead>(leads: T[]): T[] =>
   leads.filter(lead => lead.website === "None" && meetsQuality(lead));
