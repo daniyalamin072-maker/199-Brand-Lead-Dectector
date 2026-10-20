@@ -13,12 +13,12 @@ describe("Full search yield", () => {
     expect(advancePageToken(null, usedTokens)).toBeUndefined();
     expect(advancePageToken("", usedTokens)).toBeUndefined();
   });
-  it("caps raw listings at 30 per search so requests finish fast", () => {
-    expect(RAW_LISTING_CAP).toBe(30);
+  it("caps raw listings at 50 per search so requests finish fast", () => {
+    expect(RAW_LISTING_CAP).toBe(50);
     expect(reachedRawCap(0)).toBe(false);
-    expect(reachedRawCap(29)).toBe(false);
-    expect(reachedRawCap(30)).toBe(true);
-    expect(reachedRawCap(45)).toBe(true);
+    expect(reachedRawCap(49)).toBe(false);
+    expect(reachedRawCap(50)).toBe(true);
+    expect(reachedRawCap(75)).toBe(true);
   });
   it("stops a repeated token instead of making endless paid requests", () => {
     const usedTokens = new Set<string>();
