@@ -1,5 +1,5 @@
 # Contacted leads
-- [x] Remove the app-imposed pagination cutoff; consume all available tokens, keep full matching yield, and test pagination termination. (Google's own limit: max 60 results per search phrase — cannot be exceeded by any app.)
+- [x] Cap each search at 30 raw listings with a 10s request timeout and a client-side failsafe so Generate Leads never hangs; keep full matching yield within that cap.
 - [x] Replace broken mock imports with real authenticated Google Maps search; enforce location scope, quality, unique names/phones, and dynamic Maps URLs.
 - [x] Run focused regression tests and verify non-Maps page interactions.
 - [ ] Verify real Google Maps searches and listing links on an authorized deployed origin — agent sandbox does not support live Maps validation.
