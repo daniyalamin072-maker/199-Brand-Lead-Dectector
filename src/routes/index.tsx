@@ -77,7 +77,10 @@ function Index() {
       const latest = await readHistory(owner);
       if (identity.current !== owner || searchVersion.current !== version) return;
       queryClient.setQueryData(["contacted-leads", owner], latest);
-      const result = await search({ data: scope });
+      const result = await Promise.race([
+        search({ data: scope }),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Search timed out")), 15_000)),
+      ]);
       if (identity.current !== owner || searchVersion.current !== version) return;
       const next = activeLeads(result.leads, latest);
       setLeads(next); setTab("active");
