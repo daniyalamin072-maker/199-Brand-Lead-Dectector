@@ -72,7 +72,8 @@ export const searchRealLeads = createServerFn({ method: "POST" })
         } catch (error) {
           return { leads: activeLeads(leads, []), scanned, error: error instanceof Error ? error.message : "Google Maps pagination failed; showing partial results." };
         }
-      } while (pageToken);
+      } while (pageToken && !reachedRawCap(scanned));
+      if (reachedRawCap(scanned)) break;
     }
     return { leads: activeLeads(leads, []), scanned };
   });
