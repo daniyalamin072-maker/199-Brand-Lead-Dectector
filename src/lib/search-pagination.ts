@@ -1,3 +1,7 @@
+/** Hard cap on raw listings scanned per search so requests finish in seconds. */
+export const RAW_LISTING_CAP = 30;
+export const reachedRawCap = (scanned: number) => scanned >= RAW_LISTING_CAP;
+
 /** Provider-driven pagination with no app-imposed page or result cutoff. */
 export function advancePageToken(value: unknown, usedTokens: Set<string>): string | undefined {
   if (value === undefined || value === null || value === "") return undefined;
