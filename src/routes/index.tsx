@@ -77,14 +77,26 @@ function Index() {
       const latest = await readHistory(owner);
       if (identity.current !== owner || searchVersion.current !== version) return;
       queryClient.setQueryData(["contacted-leads", owner], latest);
-      const result = await Promise.race([
-        search({ data: scope }),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Search timed out")), 10_000)),
-      ]);
-      if (identity.current !== owner || searchVersion.current !== version) return;
-      const next = activeLeads(result.leads, latest);
-      setLeads(next); setTab("active");
-      if (result.error) setError(result.error);
+      let found: Lead[] = [];
+      let scanned = 0;
+      let cursor: PageCursor | null = { phrase: 0 };
+      let timedOut = false;
+      while (cursor && found.length < TARGET_LEADS && !reachedRawCap(scanned)) {
+        const current: PageCursor = cursor;
+        const result = await Promise.race([
+          search({ data: { ...scope, phrase: current.phrase, ...(current.pageToken ? { pageToken: current.pageToken } : {}) } }),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Search timed out")), 10_000)),
+        ]).catch(err => { console.error("Batch failed:", err); return { leads: [] as Lead[], scanned: 0, next: current.phrase + 1 < 3 ? { phrase: current.phrase + 1 } : null, error: "timeout" }; });
+        if (identity.current !== owner || searchVersion.current !== version) return;
+        scanned += result.scanned;
+        found = activeLeads([...found, ...result.leads], latest);
+        setLeads(found);
+        setProgress(found.length);
+        if (result.error === "timeout") timedOut = true;
+        else if (result.error) { setError(result.error); break; }
+        cursor = result.next;
+      }
+      if (timedOut && found.length === 0) setError("Google Maps took too long to respond. Please try again.");
     } catch (err) {
       console.error("Lead search failed:", err);
       if (identity.current === owner && searchVersion.current === version) setError(err instanceof Error && err.message === "Search timed out" ? "Google Maps took longer than 10 seconds. Please try again." : "Could not complete the search. Please try again.");
