@@ -4,7 +4,9 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { activeLeads, NICHES, NICHE_QUERIES, placeToLead, type Lead, type Place } from "./leads";
 import { advancePageToken, reachedRawCap } from "./search-pagination";
 
-const REQUEST_TIMEOUT_MS = 10_000;
+const REQUEST_TIMEOUT_MS = 8_000;
+/** Whole search must finish inside the 10-second budget the button allows. */
+const SEARCH_BUDGET_MS = 9_000;
 
 const GATEWAY_URL = "https://connector-gateway.lovable.dev/google_maps";
 const FIELDS = ["id", "displayName", "formattedAddress", "addressComponents", "nationalPhoneNumber", "internationalPhoneNumber", "websiteUri", "rating", "userRatingCount", "businessStatus"];
@@ -29,18 +31,22 @@ export const searchRealLeads = createServerFn({ method: "POST" })
     const seen = new Set<string>();
     const leads: Lead[] = [];
     let scanned = 0;
+    const deadline = Date.now() + SEARCH_BUDGET_MS;
     for (const phrase of NICHE_QUERIES[data.niche] ?? []) {
       let pageToken: string | undefined;
       const usedTokens = new Set<string>();
       do {
+        const remaining = deadline - Date.now();
+        if (remaining < 500) return { leads: activeLeads(leads, []), scanned };
         let response: Response;
         try {
           response = await fetch(`${GATEWAY_URL}/places/v1/places:searchText`, {
-            method: "POST", headers, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+            method: "POST", headers, signal: AbortSignal.timeout(Math.min(REQUEST_TIMEOUT_MS, remaining)),
             body: JSON.stringify({ textQuery: `${phrase} in ${data.city}, ${data.country}`, pageSize: 20, ...(pageToken ? { pageToken } : {}) }),
           });
-        } catch {
-          return { leads: activeLeads(leads, []), scanned, error: leads.length ? "Google Maps took too long; showing matching listings received so far." : "Google Maps took too long to respond. Please try again." };
+        } catch (err) {
+          console.error("Places search request failed:", err);
+          return { leads: activeLeads(leads, []), scanned, error: leads.length ? undefined : "Google Maps took too long to respond. Please try again." };
         }
         if (!response.ok) {
            const errorBody = await response.text();
