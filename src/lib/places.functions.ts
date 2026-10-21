@@ -46,7 +46,7 @@ export const searchRealLeads = createServerFn({ method: "POST" })
           });
         } catch (err) {
           console.error("Places search request failed:", err);
-          return { leads: activeLeads(leads, []), scanned, error: leads.length ? undefined : "Google Maps took too long to respond. Please try again." };
+          return { leads: activeLeads(leads, []), scanned, ...(leads.length ? {} : { error: "Google Maps took too long to respond. Please try again." }) };
         }
         if (!response.ok) {
            const errorBody = await response.text();
