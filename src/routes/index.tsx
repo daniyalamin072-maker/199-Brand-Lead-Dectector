@@ -79,14 +79,15 @@ function Index() {
       queryClient.setQueryData(["contacted-leads", owner], latest);
       const result = await Promise.race([
         search({ data: scope }),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Search timed out")), 15_000)),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Search timed out")), 10_000)),
       ]);
       if (identity.current !== owner || searchVersion.current !== version) return;
       const next = activeLeads(result.leads, latest);
       setLeads(next); setTab("active");
       if (result.error) setError(result.error);
-    } catch {
-      if (identity.current === owner && searchVersion.current === version) setError("Could not complete the search or check contacted history. Please try again.");
+    } catch (err) {
+      console.error("Lead search failed:", err);
+      if (identity.current === owner && searchVersion.current === version) setError(err instanceof Error && err.message === "Search timed out" ? "Google Maps took longer than 10 seconds. Please try again." : "Could not complete the search. Please try again.");
     }
     finally { operation.current = false; setBusy(false); }
   }
@@ -140,7 +141,7 @@ function Index() {
            <label className="space-y-2"><span className="font-mono text-xs uppercase tracking-widest">City</span><input className={input} value={city} maxLength={80} onChange={e => { clearSearch(); setCity(e.target.value); }} placeholder="Austin" /></label>
            <label className="space-y-2"><span className="font-mono text-xs uppercase tracking-widest">Country</span><input className={input} value={country} maxLength={80} onChange={e => { clearSearch(); setCountry(e.target.value); }} placeholder="USA" /></label>
            <label className="space-y-2"><span className="font-mono text-xs uppercase tracking-widest">Niche</span><select className={input} value={niche} onChange={e => { const next = NICHES.find(n => n === e.target.value); if (next) { clearSearch(); setNiche(next); } }}>{NICHES.map(n => <option key={n}>{n}</option>)}</select></label>
-          <Button onClick={run} disabled={busy || !ready || !city.trim() || !country.trim()} className={`${action} h-auto py-3 bg-foreground text-background hover:bg-background hover:text-foreground font-bold`}>{busy ? "Working…" : "Generate Leads"}</Button>
+          <Button onClick={run} disabled={busy || !ready || !city.trim() || !country.trim()} className={`${action} h-auto py-3 bg-foreground text-background hover:bg-background hover:text-foreground font-bold`}>{busy ? "Searching Google Maps…" : "Generate Leads"}</Button>
         </section>
         <section className="grid gap-4 md:grid-cols-2">
           <div className="border-2 border-foreground bg-foreground p-6 text-background"><p className="font-mono text-xs uppercase tracking-widest">Total Leads Found</p><p className="mt-2 text-6xl font-black">{visible.length}</p></div>
