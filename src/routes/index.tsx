@@ -67,30 +67,34 @@ function Index() {
     const result = await lovable.auth.signInWithOAuth(provider, { redirect_uri: window.location.origin });
     if (result.error) setError("Sign-in failed. Please try again.");
   }
-  /** Fetches exactly one Google Maps page; "more" appends to the current list. */
+  /** Generate: page 1 of every keyword variation. Load More: next page of each keyword that has one. */
   async function run(more = false) {
     if (operation.current || !ready || !city.trim() || !country.trim()) return;
     if (!user) { setNeedsSignIn(true); return; }
-    const current: PageCursor | null = more ? cursor : { phrase: 0 };
-    if (!current) return;
+    const queue: PageCursor[] = more ? cursors : (NICHE_QUERIES[niche] ?? []).map((_, phrase) => ({ phrase }));
+    if (queue.length === 0) return;
     operation.current = true; setBusy(true); setError("");
     const owner = user.id;
     const version = more ? searchVersion.current : ++searchVersion.current;
     const scope = { city: city.trim().slice(0, 80), country: country.trim().slice(0, 80), niche };
-    if (!more) { setLeads([]); setTab("active"); setCursor(null); }
+    if (!more) { setLeads([]); setTab("active"); setCursors([]); }
     try {
       const latest = await readHistory(owner);
       if (identity.current !== owner || searchVersion.current !== version) return;
       queryClient.setQueryData(["contacted-leads", owner], latest);
-      const result = await Promise.race([
-        search({ data: { ...scope, phrase: current.phrase, ...(current.pageToken ? { pageToken: current.pageToken } : {}) } }),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 9_000)),
-      ]).catch(err => { console.error("Page failed:", err); return { leads: [] as Lead[], scanned: 0, next: current.phrase + 1 < 3 ? { phrase: current.phrase + 1 } : null, error: "timeout" }; });
-      if (identity.current !== owner || searchVersion.current !== version) return;
-      // A slow page is skipped silently; the user can Load More to continue.
-      if (result.error && result.error !== "timeout") setError(result.error);
-      setLeads(prev => activeLeads([...(more ? prev : []), ...result.leads], latest));
-      setCursor(result.next);
+      const pending: PageCursor[] = [];
+      for (const current of queue) {
+        const result = await Promise.race([
+          search({ data: { ...scope, phrase: current.phrase, ...(current.pageToken ? { pageToken: current.pageToken } : {}) } }),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 9_000)),
+        ]).catch(err => { console.error("Page failed:", err); return { leads: [] as Lead[], scanned: 0, next: null, error: "timeout" }; });
+        if (identity.current !== owner || searchVersion.current !== version) return;
+        // A slow page is skipped silently; other keywords keep going.
+        if (result.error && result.error !== "timeout") { setError(result.error); break; }
+        setLeads(prev => activeLeads([...prev, ...result.leads], latest));
+        if (result.next && result.next.phrase === current.phrase && result.next.pageToken) pending.push(result.next);
+      }
+      setCursors(pending);
     } catch (err) {
       console.error("Lead search failed:", err);
       if (identity.current === owner && searchVersion.current === version) setError("Could not complete the search. Please try again.");
