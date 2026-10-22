@@ -13,5 +13,5 @@
 - Apply shared fail-closed quality validation to generated candidates, visible lists, and history writes; retain unqualified legacy history solely for duplicate exclusion without inventing missing quality data.
 - Store contacted history in Cloud with owner-scoped read/insert policies and unique per-user business keys; read all pages before generation to prevent history truncation from resurfacing completed leads.
 - Keep the home page public with inline social sign-in for saving history; mount one session provider in the root and never expose one account's history to another.
-- Run Google Places searches as one-page server calls (phrase + page token cursor); Generate fetches the first page and Load More fetches the next cursor, appending with dedup; keep credentials server-only and persist only declared history columns.
+- Run Google Places searches as one-page server calls per keyword variation; Generate fetches page 1 of every niche keyword sequentially, and Load More fetches the next page token of each keyword that still has one, appending with dedup; keep credentials server-only and persist only declared history columns.
 - Invalidate outstanding search results synchronously when location, niche, or account changes so stale responses cannot repopulate the active list.
