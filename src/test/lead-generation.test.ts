@@ -15,7 +15,7 @@ const qualityLead = { name: "Quality Plumbing", address: "10 Main St, Austin, US
 describe("Real lead validation", () => {
   it("offers exactly five separate home-service niches", () => {
     expect(NICHES).toEqual(["Plumbing", "HVAC", "Landscaping", "Roofing", "Electrician"]);
-    for (const niche of NICHES) expect(NICHE_QUERIES[niche]?.length).toBe(3);
+    for (const niche of NICHES) expect(NICHE_QUERIES[niche]?.length).toBe(5);
   });
   it("preserves actual listing identity and maps operating status to ACTIVE", () => {
     expect(placeToLead(place, { city: "Austin", country: "USA" })).toEqual({

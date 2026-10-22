@@ -3,11 +3,11 @@ export type ContactedLead = Lead & { business_key: string; contacted_at: string 
 export const NICHES = ["Plumbing", "HVAC", "Landscaping", "Roofing", "Electrician"] as const;
 // Google Maps search phrases per niche; several phrasings surface more real listings.
 export const NICHE_QUERIES: Record<string, string[]> = {
-  Plumbing: ["plumber", "plumbing service", "emergency plumber"],
-  HVAC: ["HVAC contractor", "air conditioning repair", "heating contractor"],
-  Landscaping: ["landscaper", "lawn care service", "landscaping company"],
-  Roofing: ["roofing contractor", "roofer", "roof repair"],
-  Electrician: ["electrician", "electrical contractor", "emergency electrician"],
+  Plumbing: ["plumber", "plumbing contractor", "residential plumbing", "emergency plumber", "commercial plumber"],
+  HVAC: ["HVAC contractor", "air conditioning repair", "heating contractor", "furnace repair", "HVAC service"],
+  Landscaping: ["landscaper", "lawn care service", "landscaping company", "landscape contractor", "lawn mowing service"],
+  Roofing: ["roofing contractor", "roofer", "roof repair", "residential roofing", "roof replacement"],
+  Electrician: ["electrician", "electrical contractor", "emergency electrician", "residential electrician", "commercial electrician"],
 };
 export const normalize = (value: string) => value.normalize("NFKC").toLowerCase().replace(/[^\p{L}\p{N}]/gu, "");
 const digits = (phone: string) => phone.replace(/\D/g, "");
