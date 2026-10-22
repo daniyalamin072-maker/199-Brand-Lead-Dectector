@@ -183,6 +183,7 @@ function Index() {
             </tbody>
           </table>
         </section>
+        {tab === "active" && cursor && <div className="flex justify-center"><Button onClick={() => run(true)} disabled={busy} className={`${action} h-auto px-8 py-3 font-bold`}>{busy ? `Loading more (${visible.length} found)…` : "Load More Leads"}</Button></div>}
       </main>
     </div>
   );
