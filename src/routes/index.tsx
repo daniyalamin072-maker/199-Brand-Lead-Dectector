@@ -54,7 +54,7 @@ function Index() {
   useEffect(() => { searchVersion.current++; setLeads([]); setError(""); setNeedsSignIn(false); }, [user?.id]);
   function clearSearch() {
     searchVersion.current++;
-    setLeads([]); setError(""); setTab("active");
+    setLeads([]); setError(""); setTab("active"); setCursor(null);
   }
   const visible = activeLeads(leads, history);
   const qualifiedHistory = displayableLeads(history);
@@ -67,41 +67,33 @@ function Index() {
     const result = await lovable.auth.signInWithOAuth(provider, { redirect_uri: window.location.origin });
     if (result.error) setError("Sign-in failed. Please try again.");
   }
-  async function run() {
+  /** Fetches exactly one Google Maps page; "more" appends to the current list. */
+  async function run(more = false) {
     if (operation.current || !ready || !city.trim() || !country.trim()) return;
     if (!user) { setNeedsSignIn(true); return; }
+    const current: PageCursor | null = more ? cursor : { phrase: 0 };
+    if (!current) return;
     operation.current = true; setBusy(true); setError("");
     const owner = user.id;
-    const version = ++searchVersion.current;
+    const version = more ? searchVersion.current : ++searchVersion.current;
     const scope = { city: city.trim().slice(0, 80), country: country.trim().slice(0, 80), niche };
-    setLeads([]); setTab("active"); setProgress(0);
+    if (!more) { setLeads([]); setTab("active"); setCursor(null); }
     try {
       const latest = await readHistory(owner);
       if (identity.current !== owner || searchVersion.current !== version) return;
       queryClient.setQueryData(["contacted-leads", owner], latest);
-      let found: Lead[] = [];
-      let scanned = 0;
-      let cursor: PageCursor | null = { phrase: 0 };
-      let timedOut = false;
-      while (cursor && found.length < TARGET_LEADS && !reachedRawCap(scanned)) {
-        const current: PageCursor = cursor;
-        const result = await Promise.race([
-          search({ data: { ...scope, phrase: current.phrase, ...(current.pageToken ? { pageToken: current.pageToken } : {}) } }),
-          new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Search timed out")), 10_000)),
-        ]).catch(err => { console.error("Batch failed:", err); return { leads: [] as Lead[], scanned: 0, next: current.phrase + 1 < 3 ? { phrase: current.phrase + 1 } : null, error: "timeout" }; });
-        if (identity.current !== owner || searchVersion.current !== version) return;
-        scanned += result.scanned;
-        found = activeLeads([...found, ...result.leads], latest);
-        setLeads(found);
-        setProgress(found.length);
-        if (result.error === "timeout") timedOut = true;
-        else if (result.error) { setError(result.error); break; }
-        cursor = result.next;
-      }
-      if (timedOut && found.length === 0) setError("Google Maps took too long to respond. Please try again.");
+      const result = await Promise.race([
+        search({ data: { ...scope, phrase: current.phrase, ...(current.pageToken ? { pageToken: current.pageToken } : {}) } }),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 9_000)),
+      ]).catch(err => { console.error("Page failed:", err); return { leads: [] as Lead[], scanned: 0, next: current.phrase + 1 < 3 ? { phrase: current.phrase + 1 } : null, error: "timeout" }; });
+      if (identity.current !== owner || searchVersion.current !== version) return;
+      // A slow page is skipped silently; the user can Load More to continue.
+      if (result.error && result.error !== "timeout") setError(result.error);
+      setLeads(prev => activeLeads([...(more ? prev : []), ...result.leads], latest));
+      setCursor(result.next);
     } catch (err) {
       console.error("Lead search failed:", err);
-      if (identity.current === owner && searchVersion.current === version) setError(err instanceof Error && err.message === "Search timed out" ? "Google Maps took longer than 10 seconds. Please try again." : "Could not complete the search. Please try again.");
+      if (identity.current === owner && searchVersion.current === version) setError("Could not complete the search. Please try again.");
     }
     finally { operation.current = false; setBusy(false); }
   }
