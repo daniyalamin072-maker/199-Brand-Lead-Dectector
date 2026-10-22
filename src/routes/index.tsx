@@ -9,7 +9,8 @@ import { useSession } from "@/components/session-provider";
 import { lovable } from "@/integrations/lovable";
 import { supabase } from "@/integrations/supabase/client";
 import { activeLeads, businessKey, displayableLeads, mapsUrl, NICHES, type Lead } from "@/lib/leads";
-import { searchRealLeads } from "@/lib/places.functions";
+import { searchLeadsBatch, type PageCursor } from "@/lib/places.functions";
+import { reachedRawCap, TARGET_LEADS } from "@/lib/search-pagination";
 import { readHistory, saveContacted } from "@/lib/contacted-history";
 import "@lovable.dev/cloud-auth-js/styles.css";
 export { NICHES } from "@/lib/leads";
@@ -27,7 +28,7 @@ export const Route = createFileRoute("/")({
 });
 
 function Index() {
-  const search = useServerFn(searchRealLeads);
+  const search = useServerFn(searchLeadsBatch);
   const { user, ready } = useSession();
   const queryClient = useQueryClient();
   const [city, setCity] = useState("");
@@ -36,6 +37,7 @@ function Index() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [tab, setTab] = useState<"active" | "contacted">("active");
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [copied, setCopied] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [needsSignIn, setNeedsSignIn] = useState(false);
