@@ -10,7 +10,7 @@ import { lovable } from "@/integrations/lovable";
 import { supabase } from "@/integrations/supabase/client";
 import { activeLeads, businessKey, displayableLeads, mapsUrl, NICHES, type Lead } from "@/lib/leads";
 import { searchLeadsBatch, type PageCursor } from "@/lib/places.functions";
-import { reachedRawCap, TARGET_LEADS } from "@/lib/search-pagination";
+
 import { readHistory, saveContacted } from "@/lib/contacted-history";
 import "@lovable.dev/cloud-auth-js/styles.css";
 export { NICHES } from "@/lib/leads";
@@ -37,7 +37,7 @@ function Index() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [tab, setTab] = useState<"active" | "contacted">("active");
   const [busy, setBusy] = useState(false);
-  const [progress, setProgress] = useState(0);
+  const [cursor, setCursor] = useState<PageCursor | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [needsSignIn, setNeedsSignIn] = useState(false);
@@ -54,7 +54,7 @@ function Index() {
   useEffect(() => { searchVersion.current++; setLeads([]); setError(""); setNeedsSignIn(false); }, [user?.id]);
   function clearSearch() {
     searchVersion.current++;
-    setLeads([]); setError(""); setTab("active");
+    setLeads([]); setError(""); setTab("active"); setCursor(null);
   }
   const visible = activeLeads(leads, history);
   const qualifiedHistory = displayableLeads(history);
@@ -67,41 +67,33 @@ function Index() {
     const result = await lovable.auth.signInWithOAuth(provider, { redirect_uri: window.location.origin });
     if (result.error) setError("Sign-in failed. Please try again.");
   }
-  async function run() {
+  /** Fetches exactly one Google Maps page; "more" appends to the current list. */
+  async function run(more = false) {
     if (operation.current || !ready || !city.trim() || !country.trim()) return;
     if (!user) { setNeedsSignIn(true); return; }
+    const current: PageCursor | null = more ? cursor : { phrase: 0 };
+    if (!current) return;
     operation.current = true; setBusy(true); setError("");
     const owner = user.id;
-    const version = ++searchVersion.current;
+    const version = more ? searchVersion.current : ++searchVersion.current;
     const scope = { city: city.trim().slice(0, 80), country: country.trim().slice(0, 80), niche };
-    setLeads([]); setTab("active"); setProgress(0);
+    if (!more) { setLeads([]); setTab("active"); setCursor(null); }
     try {
       const latest = await readHistory(owner);
       if (identity.current !== owner || searchVersion.current !== version) return;
       queryClient.setQueryData(["contacted-leads", owner], latest);
-      let found: Lead[] = [];
-      let scanned = 0;
-      let cursor: PageCursor | null = { phrase: 0 };
-      let timedOut = false;
-      while (cursor && found.length < TARGET_LEADS && !reachedRawCap(scanned)) {
-        const current: PageCursor = cursor;
-        const result = await Promise.race([
-          search({ data: { ...scope, phrase: current.phrase, ...(current.pageToken ? { pageToken: current.pageToken } : {}) } }),
-          new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Search timed out")), 10_000)),
-        ]).catch(err => { console.error("Batch failed:", err); return { leads: [] as Lead[], scanned: 0, next: current.phrase + 1 < 3 ? { phrase: current.phrase + 1 } : null, error: "timeout" }; });
-        if (identity.current !== owner || searchVersion.current !== version) return;
-        scanned += result.scanned;
-        found = activeLeads([...found, ...result.leads], latest);
-        setLeads(found);
-        setProgress(found.length);
-        if (result.error === "timeout") timedOut = true;
-        else if (result.error) { setError(result.error); break; }
-        cursor = result.next;
-      }
-      if (timedOut && found.length === 0) setError("Google Maps took too long to respond. Please try again.");
+      const result = await Promise.race([
+        search({ data: { ...scope, phrase: current.phrase, ...(current.pageToken ? { pageToken: current.pageToken } : {}) } }),
+        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 9_000)),
+      ]).catch(err => { console.error("Page failed:", err); return { leads: [] as Lead[], scanned: 0, next: current.phrase + 1 < 3 ? { phrase: current.phrase + 1 } : null, error: "timeout" }; });
+      if (identity.current !== owner || searchVersion.current !== version) return;
+      // A slow page is skipped silently; the user can Load More to continue.
+      if (result.error && result.error !== "timeout") setError(result.error);
+      setLeads(prev => activeLeads([...(more ? prev : []), ...result.leads], latest));
+      setCursor(result.next);
     } catch (err) {
       console.error("Lead search failed:", err);
-      if (identity.current === owner && searchVersion.current === version) setError(err instanceof Error && err.message === "Search timed out" ? "Google Maps took longer than 10 seconds. Please try again." : "Could not complete the search. Please try again.");
+      if (identity.current === owner && searchVersion.current === version) setError("Could not complete the search. Please try again.");
     }
     finally { operation.current = false; setBusy(false); }
   }
@@ -155,7 +147,7 @@ function Index() {
            <label className="space-y-2"><span className="font-mono text-xs uppercase tracking-widest">City</span><input className={input} value={city} maxLength={80} onChange={e => { clearSearch(); setCity(e.target.value); }} placeholder="Austin" /></label>
            <label className="space-y-2"><span className="font-mono text-xs uppercase tracking-widest">Country</span><input className={input} value={country} maxLength={80} onChange={e => { clearSearch(); setCountry(e.target.value); }} placeholder="USA" /></label>
            <label className="space-y-2"><span className="font-mono text-xs uppercase tracking-widest">Niche</span><select className={input} value={niche} onChange={e => { const next = NICHES.find(n => n === e.target.value); if (next) { clearSearch(); setNiche(next); } }}>{NICHES.map(n => <option key={n}>{n}</option>)}</select></label>
-          <Button onClick={run} disabled={busy || !ready || !city.trim() || !country.trim()} className={`${action} h-auto py-3 bg-foreground text-background hover:bg-background hover:text-foreground font-bold`}>{busy ? `Fetching leads (${progress} found)…` : "Generate Leads"}</Button>
+          <Button onClick={() => run()} disabled={busy || !ready || !city.trim() || !country.trim()} className={`${action} h-auto py-3 bg-foreground text-background hover:bg-background hover:text-foreground font-bold`}>{busy ? `Fetching leads (${visible.length} found)…` : "Generate Leads"}</Button>
         </section>
         <section className="grid gap-4 md:grid-cols-2">
           <div className="border-2 border-foreground bg-foreground p-6 text-background"><p className="font-mono text-xs uppercase tracking-widest">Total Leads Found</p><p className="mt-2 text-6xl font-black">{visible.length}</p></div>
@@ -191,6 +183,7 @@ function Index() {
             </tbody>
           </table>
         </section>
+        {tab === "active" && cursor && <div className="flex justify-center"><Button onClick={() => run(true)} disabled={busy} className={`${action} h-auto px-8 py-3 font-bold`}>{busy ? `Loading more (${visible.length} found)…` : "Load More Leads"}</Button></div>}
       </main>
     </div>
   );
