@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { useSession } from "@/components/session-provider";
 import { lovable } from "@/integrations/lovable";
 import { supabase } from "@/integrations/supabase/client";
-import { activeLeads, businessKey, displayableLeads, mapsUrl, NICHES, type Lead } from "@/lib/leads";
+import { activeLeads, businessKey, displayableLeads, mapsUrl, NICHES, NICHE_QUERIES, type Lead } from "@/lib/leads";
 import { searchLeadsBatch, type PageCursor } from "@/lib/places.functions";
 
 import { readHistory, saveContacted } from "@/lib/contacted-history";
@@ -37,7 +37,7 @@ function Index() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [tab, setTab] = useState<"active" | "contacted">("active");
   const [busy, setBusy] = useState(false);
-  const [cursor, setCursor] = useState<PageCursor | null>(null);
+  const [cursors, setCursors] = useState<PageCursor[]>([]);
   const [copied, setCopied] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [needsSignIn, setNeedsSignIn] = useState(false);
@@ -54,7 +54,7 @@ function Index() {
   useEffect(() => { searchVersion.current++; setLeads([]); setError(""); setNeedsSignIn(false); }, [user?.id]);
   function clearSearch() {
     searchVersion.current++;
-    setLeads([]); setError(""); setTab("active"); setCursor(null);
+    setLeads([]); setError(""); setTab("active"); setCursors([]);
   }
   const visible = activeLeads(leads, history);
   const qualifiedHistory = displayableLeads(history);
@@ -151,7 +151,7 @@ function Index() {
            <label className="space-y-2"><span className="font-mono text-xs uppercase tracking-widest">City</span><input className={input} value={city} maxLength={80} onChange={e => { clearSearch(); setCity(e.target.value); }} placeholder="Austin" /></label>
            <label className="space-y-2"><span className="font-mono text-xs uppercase tracking-widest">Country</span><input className={input} value={country} maxLength={80} onChange={e => { clearSearch(); setCountry(e.target.value); }} placeholder="USA" /></label>
            <label className="space-y-2"><span className="font-mono text-xs uppercase tracking-widest">Niche</span><select className={input} value={niche} onChange={e => { const next = NICHES.find(n => n === e.target.value); if (next) { clearSearch(); setNiche(next); } }}>{NICHES.map(n => <option key={n}>{n}</option>)}</select></label>
-          <Button onClick={() => run()} disabled={busy || !ready || !city.trim() || !country.trim()} className={`${action} h-auto py-3 bg-foreground text-background hover:bg-background hover:text-foreground font-bold`}>{busy ? `Fetching leads (${visible.length} found)…` : "Generate Leads"}</Button>
+          <Button onClick={() => run()} disabled={busy || !ready || !city.trim() || !country.trim()} className={`${action} h-auto py-3 bg-foreground text-background hover:bg-background hover:text-foreground font-bold`}>{busy ? `Scanning Google Maps (${visible.length} found)…` : "Generate Leads"}</Button>
         </section>
         <section className="grid gap-4 md:grid-cols-2">
           <div className="border-2 border-foreground bg-foreground p-6 text-background"><p className="font-mono text-xs uppercase tracking-widest">Total Leads Found</p><p className="mt-2 text-6xl font-black">{visible.length}</p></div>
@@ -187,7 +187,7 @@ function Index() {
             </tbody>
           </table>
         </section>
-        {tab === "active" && cursor && <div className="flex justify-center"><Button onClick={() => run(true)} disabled={busy} className={`${action} h-auto px-8 py-3 font-bold`}>{busy ? `Loading more (${visible.length} found)…` : "Load More Leads"}</Button></div>}
+        {tab === "active" && cursors.length > 0 && <div className="flex justify-center"><Button onClick={() => run(true)} disabled={busy} className={`${action} h-auto px-8 py-3 font-bold`}>{busy ? `Scanning Google Maps (${visible.length} found)…` : "Load More Leads"}</Button></div>}
       </main>
     </div>
   );
