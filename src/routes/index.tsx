@@ -9,7 +9,8 @@ import { useSession } from "@/components/session-provider";
 import { lovable } from "@/integrations/lovable";
 import { supabase } from "@/integrations/supabase/client";
 import { activeLeads, businessKey, displayableLeads, mapsUrl, NICHES, type Lead } from "@/lib/leads";
-import { searchRealLeads } from "@/lib/places.functions";
+import { searchLeadsBatch, type PageCursor } from "@/lib/places.functions";
+import { reachedRawCap, TARGET_LEADS } from "@/lib/search-pagination";
 import { readHistory, saveContacted } from "@/lib/contacted-history";
 import "@lovable.dev/cloud-auth-js/styles.css";
 export { NICHES } from "@/lib/leads";
@@ -27,7 +28,7 @@ export const Route = createFileRoute("/")({
 });
 
 function Index() {
-  const search = useServerFn(searchRealLeads);
+  const search = useServerFn(searchLeadsBatch);
   const { user, ready } = useSession();
   const queryClient = useQueryClient();
   const [city, setCity] = useState("");
@@ -36,6 +37,7 @@ function Index() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [tab, setTab] = useState<"active" | "contacted">("active");
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState(0);
   const [copied, setCopied] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [needsSignIn, setNeedsSignIn] = useState(false);
@@ -72,7 +74,7 @@ function Index() {
     const owner = user.id;
     const version = ++searchVersion.current;
     const scope = { city: city.trim().slice(0, 80), country: country.trim().slice(0, 80), niche };
-    setLeads([]); setTab("active");
+    setLeads([]); setTab("active"); setProgress(0);
     try {
       const latest = await readHistory(owner);
       if (identity.current !== owner || searchVersion.current !== version) return;
@@ -153,7 +155,7 @@ function Index() {
            <label className="space-y-2"><span className="font-mono text-xs uppercase tracking-widest">City</span><input className={input} value={city} maxLength={80} onChange={e => { clearSearch(); setCity(e.target.value); }} placeholder="Austin" /></label>
            <label className="space-y-2"><span className="font-mono text-xs uppercase tracking-widest">Country</span><input className={input} value={country} maxLength={80} onChange={e => { clearSearch(); setCountry(e.target.value); }} placeholder="USA" /></label>
            <label className="space-y-2"><span className="font-mono text-xs uppercase tracking-widest">Niche</span><select className={input} value={niche} onChange={e => { const next = NICHES.find(n => n === e.target.value); if (next) { clearSearch(); setNiche(next); } }}>{NICHES.map(n => <option key={n}>{n}</option>)}</select></label>
-          <Button onClick={run} disabled={busy || !ready || !city.trim() || !country.trim()} className={`${action} h-auto py-3 bg-foreground text-background hover:bg-background hover:text-foreground font-bold`}>{busy ? "Searching Google Maps…" : "Generate Leads"}</Button>
+          <Button onClick={run} disabled={busy || !ready || !city.trim() || !country.trim()} className={`${action} h-auto py-3 bg-foreground text-background hover:bg-background hover:text-foreground font-bold`}>{busy ? `Fetching leads (${progress} found)…` : "Generate Leads"}</Button>
         </section>
         <section className="grid gap-4 md:grid-cols-2">
           <div className="border-2 border-foreground bg-foreground p-6 text-background"><p className="font-mono text-xs uppercase tracking-widest">Total Leads Found</p><p className="mt-2 text-6xl font-black">{visible.length}</p></div>
