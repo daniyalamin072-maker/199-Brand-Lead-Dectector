@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { useSession } from "@/components/session-provider";
 import { lovable } from "@/integrations/lovable";
 import { supabase } from "@/integrations/supabase/client";
-import { activeLeads, businessKey, displayableLeads, mapsUrl, NICHES, type Lead } from "@/lib/leads";
+import { activeLeads, businessKey, displayableLeads, mapsUrl, NICHES, NICHE_QUERIES, type Lead } from "@/lib/leads";
 import { searchLeadsBatch, type PageCursor } from "@/lib/places.functions";
 
 import { readHistory, saveContacted } from "@/lib/contacted-history";
@@ -37,7 +37,7 @@ function Index() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [tab, setTab] = useState<"active" | "contacted">("active");
   const [busy, setBusy] = useState(false);
-  const [cursor, setCursor] = useState<PageCursor | null>(null);
+  const [cursors, setCursors] = useState<PageCursor[]>([]);
   const [copied, setCopied] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [needsSignIn, setNeedsSignIn] = useState(false);
@@ -54,7 +54,7 @@ function Index() {
   useEffect(() => { searchVersion.current++; setLeads([]); setError(""); setNeedsSignIn(false); }, [user?.id]);
   function clearSearch() {
     searchVersion.current++;
-    setLeads([]); setError(""); setTab("active"); setCursor(null);
+    setLeads([]); setError(""); setTab("active"); setCursors([]);
   }
   const visible = activeLeads(leads, history);
   const qualifiedHistory = displayableLeads(history);
@@ -67,30 +67,34 @@ function Index() {
     const result = await lovable.auth.signInWithOAuth(provider, { redirect_uri: window.location.origin });
     if (result.error) setError("Sign-in failed. Please try again.");
   }
-  /** Fetches exactly one Google Maps page; "more" appends to the current list. */
+  /** Generate: page 1 of every keyword variation. Load More: next page of each keyword that has one. */
   async function run(more = false) {
     if (operation.current || !ready || !city.trim() || !country.trim()) return;
     if (!user) { setNeedsSignIn(true); return; }
-    const current: PageCursor | null = more ? cursor : { phrase: 0 };
-    if (!current) return;
+    const queue: PageCursor[] = more ? cursors : (NICHE_QUERIES[niche] ?? []).map((_, phrase) => ({ phrase }));
+    if (queue.length === 0) return;
     operation.current = true; setBusy(true); setError("");
     const owner = user.id;
     const version = more ? searchVersion.current : ++searchVersion.current;
     const scope = { city: city.trim().slice(0, 80), country: country.trim().slice(0, 80), niche };
-    if (!more) { setLeads([]); setTab("active"); setCursor(null); }
+    if (!more) { setLeads([]); setTab("active"); setCursors([]); }
     try {
       const latest = await readHistory(owner);
       if (identity.current !== owner || searchVersion.current !== version) return;
       queryClient.setQueryData(["contacted-leads", owner], latest);
-      const result = await Promise.race([
-        search({ data: { ...scope, phrase: current.phrase, ...(current.pageToken ? { pageToken: current.pageToken } : {}) } }),
-        new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 9_000)),
-      ]).catch(err => { console.error("Page failed:", err); return { leads: [] as Lead[], scanned: 0, next: current.phrase + 1 < 3 ? { phrase: current.phrase + 1 } : null, error: "timeout" }; });
-      if (identity.current !== owner || searchVersion.current !== version) return;
-      // A slow page is skipped silently; the user can Load More to continue.
-      if (result.error && result.error !== "timeout") setError(result.error);
-      setLeads(prev => activeLeads([...(more ? prev : []), ...result.leads], latest));
-      setCursor(result.next);
+      const pending: PageCursor[] = [];
+      for (const current of queue) {
+        const result = await Promise.race([
+          search({ data: { ...scope, phrase: current.phrase, ...(current.pageToken ? { pageToken: current.pageToken } : {}) } }),
+          new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 9_000)),
+        ]).catch(err => { console.error("Page failed:", err); return { leads: [] as Lead[], scanned: 0, next: null, error: "timeout" }; });
+        if (identity.current !== owner || searchVersion.current !== version) return;
+        // A slow page is skipped silently; other keywords keep going.
+        if (result.error && result.error !== "timeout") { setError(result.error); break; }
+        setLeads(prev => activeLeads([...prev, ...result.leads], latest));
+        if (result.next && result.next.phrase === current.phrase && result.next.pageToken) pending.push(result.next);
+      }
+      setCursors(pending);
     } catch (err) {
       console.error("Lead search failed:", err);
       if (identity.current === owner && searchVersion.current === version) setError("Could not complete the search. Please try again.");
@@ -147,7 +151,7 @@ function Index() {
            <label className="space-y-2"><span className="font-mono text-xs uppercase tracking-widest">City</span><input className={input} value={city} maxLength={80} onChange={e => { clearSearch(); setCity(e.target.value); }} placeholder="Austin" /></label>
            <label className="space-y-2"><span className="font-mono text-xs uppercase tracking-widest">Country</span><input className={input} value={country} maxLength={80} onChange={e => { clearSearch(); setCountry(e.target.value); }} placeholder="USA" /></label>
            <label className="space-y-2"><span className="font-mono text-xs uppercase tracking-widest">Niche</span><select className={input} value={niche} onChange={e => { const next = NICHES.find(n => n === e.target.value); if (next) { clearSearch(); setNiche(next); } }}>{NICHES.map(n => <option key={n}>{n}</option>)}</select></label>
-          <Button onClick={() => run()} disabled={busy || !ready || !city.trim() || !country.trim()} className={`${action} h-auto py-3 bg-foreground text-background hover:bg-background hover:text-foreground font-bold`}>{busy ? `Fetching leads (${visible.length} found)…` : "Generate Leads"}</Button>
+          <Button onClick={() => run()} disabled={busy || !ready || !city.trim() || !country.trim()} className={`${action} h-auto py-3 bg-foreground text-background hover:bg-background hover:text-foreground font-bold`}>{busy ? `Scanning Google Maps (${visible.length} found)…` : "Generate Leads"}</Button>
         </section>
         <section className="grid gap-4 md:grid-cols-2">
           <div className="border-2 border-foreground bg-foreground p-6 text-background"><p className="font-mono text-xs uppercase tracking-widest">Total Leads Found</p><p className="mt-2 text-6xl font-black">{visible.length}</p></div>
@@ -183,7 +187,7 @@ function Index() {
             </tbody>
           </table>
         </section>
-        {tab === "active" && cursor && <div className="flex justify-center"><Button onClick={() => run(true)} disabled={busy} className={`${action} h-auto px-8 py-3 font-bold`}>{busy ? `Loading more (${visible.length} found)…` : "Load More Leads"}</Button></div>}
+        {tab === "active" && cursors.length > 0 && <div className="flex justify-center"><Button onClick={() => run(true)} disabled={busy} className={`${action} h-auto px-8 py-3 font-bold`}>{busy ? `Scanning Google Maps (${visible.length} found)…` : "Load More Leads"}</Button></div>}
       </main>
     </div>
   );
