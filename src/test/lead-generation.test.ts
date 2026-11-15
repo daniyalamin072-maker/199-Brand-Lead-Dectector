@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { activeLeads, businessKey, displayableLeads, mapsUrl, meetsQuality, matchesLocation, NICHES, NICHE_QUERIES, placeToLead, type Place } from "@/lib/leads";
+import { tieredLeads, activeLeads, businessKey, displayableLeads, mapsUrl, meetsQuality, matchesLocation, NICHES, NICHE_QUERIES, placeToLead, type Place } from "@/lib/leads";
 
 const place: Place = {
   id: "real-listing-id", displayName: { text: "Quality Plumbing" },
@@ -36,9 +36,9 @@ describe("Real lead validation", () => {
     expect(activeLeads([{ ...qualityLead, google_rating: 3.99 }], [])).toEqual([]);
     expect(meetsQuality({ ...qualityLead, google_rating: 5 })).toBe(true);
   });
-  it("requires at least 15 reviews", () => {
-    expect(placeToLead({ ...place, userRatingCount: 14 })).toBeNull();
-    expect(activeLeads([{ ...qualityLead, review_count: 14 }], [])).toEqual([]);
+  it("requires at least 5 reviews", () => {
+    expect(placeToLead({ ...place, userRatingCount: 4 })).toBeNull();
+    expect(activeLeads([{ ...qualityLead, review_count: 4 }], [])).toEqual([]);
     expect(meetsQuality({ ...qualityLead, review_count: 15 })).toBe(true);
     expect(meetsQuality(qualityLead)).toBe(true);
   });
@@ -88,13 +88,10 @@ describe("Real lead validation", () => {
   });
 });
 
-import { sampleLeads } from "@/lib/leads";
-describe("Sample fallback", () => {
-  it("gives 20 unique, flagged, no-website 4.0+ leads in the searched city and appends fresh ones", () => {
-    const scope = { city: "Lahore", country: "Pakistan", niche: "Plumbing" };
-    const first = sampleLeads(scope);
-    expect(first).toHaveLength(20);
-    expect(first.every(l => l.sample && l.website === "None" && meetsQuality(l) && l.address.includes("Lahore"))).toBe(true);
-    expect(activeLeads([...first, ...sampleLeads(scope, 20, 20)], [])).toHaveLength(40);
+describe("Tiered reviews", () => {
+  it("prefers 15+ reviews and falls back to 5+ only when none reach 15", () => {
+    const a = { ...qualityLead, review_count: 15 }, b = { ...qualityLead, name: "B", review_count: 5 };
+    expect(tieredLeads([a, b])).toEqual([a]);
+    expect(tieredLeads([b])).toEqual([b]);
   });
 });
