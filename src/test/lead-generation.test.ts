@@ -87,3 +87,14 @@ describe("Real lead validation", () => {
     expect(mapsUrl({ ...dallas, place_id: "id" })).toBe(mapsUrl(dallas));
   });
 });
+
+import { sampleLeads } from "@/lib/leads";
+describe("Sample fallback", () => {
+  it("gives 20 unique, flagged, no-website 4.0+ leads in the searched city and appends fresh ones", () => {
+    const scope = { city: "Lahore", country: "Pakistan", niche: "Plumbing" };
+    const first = sampleLeads(scope);
+    expect(first).toHaveLength(20);
+    expect(first.every(l => l.sample && l.website === "None" && meetsQuality(l) && l.address.includes("Lahore"))).toBe(true);
+    expect(activeLeads([...first, ...sampleLeads(scope, 20, 20)], [])).toHaveLength(40);
+  });
+});

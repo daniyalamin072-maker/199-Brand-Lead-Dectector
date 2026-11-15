@@ -1,4 +1,4 @@
-export type Lead = { name: string; phone: string; address: string; website: "None"; google_rating: number | null; review_count: number | null; business_status: string | null; place_id?: string; city?: string };
+export type Lead = { name: string; phone: string; address: string; website: "None"; google_rating: number | null; review_count: number | null; business_status: string | null; place_id?: string; city?: string; sample?: true };
 export type ContactedLead = Lead & { business_key: string; contacted_at: string };
 export const NICHES = ["Plumbing", "HVAC", "Landscaping", "Roofing", "Electrician"] as const;
 // Google Maps search phrases per niche; several phrasings surface more real listings.
@@ -69,5 +69,29 @@ export function activeLeads(leads: Lead[], history: Lead[]): Lead[] {
     keys.add(key); names.add(name);
     if (phone) phones.add(phone);
     return true;
+  });
+}
+
+const SAMPLE_FIRST = ["Summit", "Oakline", "Brightway", "Northgate", "Ironwood", "Bluebird", "Keystone", "Cedar", "Pioneer", "Silverline", "Harbor", "Maple", "Granite", "Redstone", "Evergreen", "Lakeside", "Hilltop", "Crestview", "Riverbend", "Westfield"];
+const SAMPLE_SUFFIX: Record<string, string[]> = {
+  Plumbing: ["Plumbing", "Pipe & Drain", "Plumbing Co."], HVAC: ["Heating & Air", "HVAC Services", "Climate Control"],
+  Landscaping: ["Landscaping", "Lawn & Garden", "Yard Care"], Roofing: ["Roofing", "Roof Works", "Roofing Co."],
+  Electrician: ["Electric", "Electrical Services", "Wiring Co."],
+};
+const SAMPLE_STREETS = ["Main St", "Oak Ave", "Park Rd", "Elm St", "Market St", "Lake Dr", "Hill Rd", "Church St"];
+/** Clearly flagged placeholder rows shown only when Google returns nothing; never real listings, never saved. */
+export function sampleLeads(scope: SearchScope & { niche: string }, count = 20, offset = 0): Lead[] {
+  const suffixes = SAMPLE_SUFFIX[scope.niche] ?? [scope.niche];
+  return Array.from({ length: count }, (_, k) => {
+    const i = offset + k;
+    const first = SAMPLE_FIRST[i % SAMPLE_FIRST.length] ?? "Local";
+    const suffix = suffixes[Math.floor(i / SAMPLE_FIRST.length) % suffixes.length] ?? scope.niche;
+    const round = Math.floor(i / (SAMPLE_FIRST.length * suffixes.length));
+    return {
+      name: `${first} ${suffix}${round ? ` ${round + 1}` : ""}`, phone: "Sample — no real number",
+      address: `${100 + i * 7} ${SAMPLE_STREETS[i % SAMPLE_STREETS.length]}, ${scope.city}, ${scope.country}`,
+      website: "None", city: scope.city, sample: true,
+      google_rating: Math.round((4 + ((i * 37) % 10) / 10) * 10) / 10, review_count: 15 + ((i * 53) % 120), business_status: "ACTIVE",
+    };
   });
 }

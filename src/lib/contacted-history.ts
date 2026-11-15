@@ -15,6 +15,7 @@ export async function readHistory(userId: string): Promise<ContactedLead[]> {
 }
 
 export async function saveContacted(userId: string, leads: Lead[]) {
+  if (leads.some(lead => lead.sample)) throw new Error("Sample leads cannot be saved");
   if (displayableLeads(leads).length !== leads.length) throw new Error("Lead does not meet quality requirements");
   const unique = new Map(leads.map(lead => [businessKey(lead), lead]));
   const { error } = await supabase.from("contacted_leads").upsert(
