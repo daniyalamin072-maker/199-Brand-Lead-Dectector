@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Check, CheckCheck, Copy, Download, ExternalLink, LogOut } from "lucide-react";
+import { Check, CheckCheck, Copy, Download, LogOut } from "lucide-react";
 import logo from "@/assets/199-logo.jpg.asset.json";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/components/session-provider";
