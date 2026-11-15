@@ -1,4 +1,4 @@
-export type Lead = { name: string; phone: string; address: string; website: "None"; google_rating: number | null; review_count: number | null; business_status: string | null; place_id?: string; city?: string; sample?: true };
+export type Lead = { name: string; phone: string; address: string; website: "None"; google_rating: number | null; review_count: number | null; business_status: string | null; place_id?: string; city?: string };
 export type ContactedLead = Lead & { business_key: string; contacted_at: string };
 export const NICHES = ["Plumbing", "HVAC", "Landscaping", "Roofing", "Electrician"] as const;
 // Google Maps search phrases per niche; several phrasings surface more real listings.
@@ -14,11 +14,18 @@ const digits = (phone: string) => phone.replace(/\D/g, "");
 export const businessKey = (lead: Lead) => `${normalize(lead.name)}|${normalize(lead.address)}`;
 export const mapsUrl = (lead: Lead, city = lead.city ?? "") =>
   `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(lead.name + ' ' + lead.address + ' ' + city)}`;
+/** Preferred review minimum; when no lead in the list reaches it, 5+ is accepted instead. */
+export const PREFERRED_MIN_REVIEWS = 15;
+export const FALLBACK_MIN_REVIEWS = 5;
+export function tieredLeads<T extends Lead>(leads: T[]): T[] {
+  const strong = leads.filter(l => (l.review_count ?? 0) >= PREFERRED_MIN_REVIEWS);
+  return strong.length > 0 ? strong : leads;
+}
 export function meetsQuality(lead: Lead): boolean {
   return typeof lead.google_rating === "number" && Number.isFinite(lead.google_rating)
     && lead.google_rating >= 4.0 && lead.google_rating <= 5.0
     && typeof lead.review_count === "number" && Number.isSafeInteger(lead.review_count)
-    && lead.review_count >= 15 && lead.business_status === "ACTIVE";
+    && lead.review_count >= FALLBACK_MIN_REVIEWS && lead.business_status === "ACTIVE";
 }
 export const displayableLeads = <T extends Lead>(leads: T[]): T[] =>
   leads.filter(lead => lead.website === "None" && meetsQuality(lead));
@@ -72,26 +79,3 @@ export function activeLeads(leads: Lead[], history: Lead[]): Lead[] {
   });
 }
 
-const SAMPLE_FIRST = ["Summit", "Oakline", "Brightway", "Northgate", "Ironwood", "Bluebird", "Keystone", "Cedar", "Pioneer", "Silverline", "Harbor", "Maple", "Granite", "Redstone", "Evergreen", "Lakeside", "Hilltop", "Crestview", "Riverbend", "Westfield"];
-const SAMPLE_SUFFIX: Record<string, string[]> = {
-  Plumbing: ["Plumbing", "Pipe & Drain", "Plumbing Co."], HVAC: ["Heating & Air", "HVAC Services", "Climate Control"],
-  Landscaping: ["Landscaping", "Lawn & Garden", "Yard Care"], Roofing: ["Roofing", "Roof Works", "Roofing Co."],
-  Electrician: ["Electric", "Electrical Services", "Wiring Co."],
-};
-const SAMPLE_STREETS = ["Main St", "Oak Ave", "Park Rd", "Elm St", "Market St", "Lake Dr", "Hill Rd", "Church St"];
-/** Clearly flagged placeholder rows shown only when Google returns nothing; never real listings, never saved. */
-export function sampleLeads(scope: SearchScope & { niche: string }, count = 20, offset = 0): Lead[] {
-  const suffixes = SAMPLE_SUFFIX[scope.niche] ?? [scope.niche];
-  return Array.from({ length: count }, (_, k) => {
-    const i = offset + k;
-    const first = SAMPLE_FIRST[i % SAMPLE_FIRST.length] ?? "Local";
-    const suffix = suffixes[Math.floor(i / SAMPLE_FIRST.length) % suffixes.length] ?? scope.niche;
-    const round = Math.floor(i / (SAMPLE_FIRST.length * suffixes.length));
-    return {
-      name: `${first} ${suffix}${round ? ` ${round + 1}` : ""}`, phone: "Sample — no real number",
-      address: `${100 + i * 7} ${SAMPLE_STREETS[i % SAMPLE_STREETS.length]}, ${scope.city}, ${scope.country}`,
-      website: "None", city: scope.city, sample: true,
-      google_rating: Math.round((4 + ((i * 37) % 10) / 10) * 10) / 10, review_count: 15 + ((i * 53) % 120), business_status: "ACTIVE",
-    };
-  });
-}

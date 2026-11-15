@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { useSession } from "@/components/session-provider";
 import { lovable } from "@/integrations/lovable";
 import { supabase } from "@/integrations/supabase/client";
-import { activeLeads, businessKey, displayableLeads, mapsUrl, NICHES, sampleLeads, NICHE_QUERIES, type Lead } from "@/lib/leads";
+import { activeLeads, businessKey, displayableLeads, mapsUrl, NICHES, tieredLeads, NICHE_QUERIES, type Lead } from "@/lib/leads";
 import { searchLeadsBatch, type PageCursor } from "@/lib/places.functions";
 
 import { readHistory, saveContacted } from "@/lib/contacted-history";
@@ -56,7 +56,7 @@ function Index() {
     searchVersion.current++;
     setLeads([]); setError(""); setTab("active"); setCursors([]);
   }
-  const visible = activeLeads(leads, history);
+  const visible = tieredLeads(activeLeads(leads, history));
   const qualifiedHistory = displayableLeads(history);
   const displayed = tab === "active" ? visible : qualifiedHistory;
   const input = "w-full border-2 border-foreground bg-background px-4 py-3 font-mono text-sm outline-none focus:bg-foreground focus:text-background";
@@ -71,11 +71,6 @@ function Index() {
   async function run(more = false) {
     if (operation.current || !ready || !city.trim() || !country.trim()) return;
     if (!user) { setNeedsSignIn(true); return; }
-    if (more && leads.length > 0 && leads.every(l => l.sample)) {
-      const scope0 = { city: city.trim().slice(0, 80), country: country.trim().slice(0, 80), niche };
-      setLeads(prev => [...prev, ...sampleLeads(scope0, 20, prev.length)]);
-      return;
-    }
     const queue: PageCursor[] = more ? cursors : (NICHE_QUERIES[niche] ?? []).map((_, phrase) => ({ phrase }));
     if (queue.length === 0) return;
     operation.current = true; setBusy(true); setError("");
@@ -100,15 +95,13 @@ function Index() {
         if (result.next && result.next.phrase === current.phrase && result.next.pageToken) pending.push(result.next);
       }
       setCursors(pending);
-      if (!more) setLeads(prev => prev.length === 0 ? sampleLeads(scope) : prev);
     } catch (err) {
       console.error("Lead search failed:", err);
       if (identity.current === owner && searchVersion.current === version) setError("Could not complete the search. Please try again.");
     }
     finally { operation.current = false; setBusy(false); }
   }
-  async function markDone(all: Lead[]) {
-    const selected = all.filter(l => !l.sample);
+  async function markDone(selected: Lead[]) {
     if (!user) { setNeedsSignIn(true); return; }
     if (operation.current || selected.length === 0) return;
     operation.current = true; setBusy(true); setError("");
@@ -177,7 +170,7 @@ function Index() {
           </div>
           <div className="flex flex-wrap gap-2">
             <Button variant="outline" className={action} disabled={displayed.length === 0} onClick={exportCsv}><Download />Export CSV</Button>
-            {tab === "active" && <Button variant="outline" className={action} disabled={busy || !visible.some(l => !l.sample)} onClick={() => markDone(visible)}><CheckCheck />Mark All as Done</Button>}
+            {tab === "active" && <Button variant="outline" className={action} disabled={busy || visible.length === 0} onClick={() => markDone(visible)}><CheckCheck />Mark All as Done</Button>}
           </div>
         </div>
         {ready && !user && (tab === "contacted" || needsSignIn) && <section className="border-y-2 border-foreground py-5 space-y-4">
@@ -191,19 +184,19 @@ function Index() {
             <tbody>
               {displayed.length === 0 && tab === "contacted" && <tr><td colSpan={7} className="p-10 text-center font-mono text-muted-foreground">{user && historyQuery.isPending ? "Loading contacted leads…" : "No contacted leads yet."}</td></tr>}
               {displayed.map(lead => <tr key={businessKey(lead)} className="border-t-2 border-foreground">
-                <td className="p-4 font-bold">{lead.name}{lead.sample && <span className="ml-2 border-2 border-foreground px-1 font-mono text-[10px] uppercase">Sample</span>}</td><td className="p-4 font-mono whitespace-nowrap">{lead.phone}</td><td className="p-4">{lead.address}</td>
+                <td className="p-4 font-bold">{lead.name}</td><td className="p-4 font-mono whitespace-nowrap">{lead.phone}</td><td className="p-4">{lead.address}</td>
                 <td className="p-4"><span className="inline-block whitespace-nowrap border-2 border-foreground bg-foreground text-background px-2 py-1 font-mono text-xs uppercase">No Website</span></td>
                 {tab === "contacted" && <td className="p-4 whitespace-nowrap font-mono text-xs">{"contacted_at" in lead && typeof lead.contacted_at === "string" ? new Date(lead.contacted_at).toLocaleDateString() : ""}</td>}
                 <td className="p-4 whitespace-nowrap"><a href={mapsUrl(lead)} target="_blank" rel="noopener noreferrer" onClick={e => openMaps(e, lead)} title="Open this business in a new Google Maps window" className={`${action} inline-flex items-center gap-2 px-2 py-1 text-xs`}>View ↗</a></td>
                 <td className="p-4"><div className="flex flex-col items-end gap-2">
                   <Button variant="outline" size="sm" onClick={() => copy(lead)} className={action}><Copy />{copied === businessKey(lead) ? "Copied" : "Copy Lead"}</Button>
-                  {tab === "active" && !lead.sample && <Button variant="outline" size="sm" disabled={busy} onClick={() => markDone([lead])} className={action}><Check />Mark as Done</Button>}
+                  {tab === "active" && <Button variant="outline" size="sm" disabled={busy} onClick={() => markDone([lead])} className={action}><Check />Mark as Done</Button>}
                 </div></td>
               </tr>)}
             </tbody>
           </table>
         </section>
-        {tab === "active" && (cursors.length > 0 || (visible.length > 0 && visible.every(l => l.sample))) && <div className="flex justify-center"><Button onClick={() => run(true)} disabled={busy} className={`${action} h-auto px-8 py-3 font-bold`}>{busy ? `Scanning Google Maps (${visible.length} found)…` : "Load More Leads"}</Button></div>}
+        {tab === "active" && cursors.length > 0 && <div className="flex justify-center"><Button onClick={() => run(true)} disabled={busy} className={`${action} h-auto px-8 py-3 font-bold`}>{busy ? `Scanning Google Maps (${visible.length} found)…` : "Load More Leads"}</Button></div>}
       </main>
     </div>
   );
