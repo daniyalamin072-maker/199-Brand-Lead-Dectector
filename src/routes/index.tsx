@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState, type MouseEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { Check, CheckCheck, Copy, ExternalLink, LogOut } from "lucide-react";
+import { Check, CheckCheck, Copy, Download, LogOut } from "lucide-react";
 import logo from "@/assets/199-logo.jpg.asset.json";
 import { Button } from "@/components/ui/button";
 import { useSession } from "@/components/session-provider";
@@ -120,6 +120,12 @@ function Index() {
     } catch { setError("Could not save contacted leads. Your active leads have not been removed. Please try again."); }
     finally { operation.current = false; setBusy(false); }
   }
+  function exportCsv() {
+    const cell = (v: string) => `"${v.replace(/"/g, '""')}"`;
+    const rows = [["Business", "Phone", "Address", "Website", "Rating", "Reviews", "Maps Link"], ...displayed.map(l => [l.name, l.phone, l.address, "None", String(l.google_rating ?? ""), String(l.review_count ?? ""), mapsUrl(l)])];
+    const url = URL.createObjectURL(new Blob([rows.map(r => r.map(cell).join(",")).join("\n")], { type: "text/csv" }));
+    const a = document.createElement("a"); a.href = url; a.download = `199-brand-leads-${tab}.csv`; a.click(); URL.revokeObjectURL(url);
+  }
   async function copy(lead: Lead) {
     try { await navigator.clipboard.writeText(`${lead.name}\n${lead.phone}\n${lead.address}\nWebsite: None`); setCopied(businessKey(lead)); setTimeout(() => setCopied(null), 1500); }
     catch { setError("Could not copy this lead. Please allow clipboard access."); }
@@ -162,7 +168,10 @@ function Index() {
             <Button role="tab" aria-selected={tab === "active"} onClick={() => setTab("active")} className={`${action} ${tab === "active" ? "bg-foreground text-background" : ""}`}>Generate Leads ({visible.length})</Button>
             <Button role="tab" aria-selected={tab === "contacted"} onClick={() => setTab("contacted")} className={`${action} ${tab === "contacted" ? "bg-foreground text-background" : ""}`}>Contacted Leads ({qualifiedHistory.length})</Button>
           </div>
-          {tab === "active" && <Button variant="outline" className={action} disabled={busy || visible.length === 0} onClick={() => markDone(visible)}><CheckCheck />Mark All as Done</Button>}
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" className={action} disabled={displayed.length === 0} onClick={exportCsv}><Download />Export CSV</Button>
+            {tab === "active" && <Button variant="outline" className={action} disabled={busy || visible.length === 0} onClick={() => markDone(visible)}><CheckCheck />Mark All as Done</Button>}
+          </div>
         </div>
         {ready && !user && (tab === "contacted" || needsSignIn) && <section className="border-y-2 border-foreground py-5 space-y-4">
            <p className="font-mono text-sm">Sign in to search Google Maps and save your contacted leads.</p>
@@ -178,7 +187,7 @@ function Index() {
                 <td className="p-4 font-bold">{lead.name}</td><td className="p-4 font-mono whitespace-nowrap">{lead.phone}</td><td className="p-4">{lead.address}</td>
                 <td className="p-4"><span className="inline-block whitespace-nowrap border-2 border-foreground bg-foreground text-background px-2 py-1 font-mono text-xs uppercase">No Website</span></td>
                 {tab === "contacted" && <td className="p-4 whitespace-nowrap font-mono text-xs">{"contacted_at" in lead && typeof lead.contacted_at === "string" ? new Date(lead.contacted_at).toLocaleDateString() : ""}</td>}
-                <td className="p-4 whitespace-nowrap"><a href={mapsUrl(lead)} target="_blank" rel="noopener noreferrer" onClick={e => openMaps(e, lead)} title="Open this business in a new Google Maps window" className={`${action} inline-flex items-center gap-2 px-2 py-1 text-xs`}><ExternalLink className="h-4 w-4" />Maps Link</a></td>
+                <td className="p-4 whitespace-nowrap"><a href={mapsUrl(lead)} target="_blank" rel="noopener noreferrer" onClick={e => openMaps(e, lead)} title="Open this business in a new Google Maps window" className={`${action} inline-flex items-center gap-2 px-2 py-1 text-xs`}>View ↗</a></td>
                 <td className="p-4"><div className="flex flex-col items-end gap-2">
                   <Button variant="outline" size="sm" onClick={() => copy(lead)} className={action}><Copy />{copied === businessKey(lead) ? "Copied" : "Copy Lead"}</Button>
                   {tab === "active" && <Button variant="outline" size="sm" disabled={busy} onClick={() => markDone([lead])} className={action}><Check />Mark as Done</Button>}
