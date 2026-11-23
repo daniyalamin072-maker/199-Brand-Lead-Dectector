@@ -9,7 +9,7 @@ export async function readHistory(userId: string): Promise<ContactedLead[]> {
       .eq("user_id", userId).order("contacted_at", { ascending: false }).order("id")
       .range(offset, offset + 999);
     if (error) throw error;
-    for (const row of data ?? []) rows.push({ ...row, website: "None" });
+    for (const row of data ?? []) rows.push({ ...row, website: "None", source: row.business_status === "OSM_LISTED" ? "openstreetmap" : "google" });
     if ((data?.length ?? 0) < 1000) return rows;
   }
 }

@@ -1,14 +1,7 @@
-/** Hard cap on raw listings scanned per search so requests finish in seconds. */
-export const RAW_LISTING_CAP = 200;
-/** Stop the deep scan once this many qualified leads are collected. */
-export const TARGET_LEADS = 50;
-export const reachedRawCap = (scanned: number) => scanned >= RAW_LISTING_CAP;
+export const INITIAL_SEARCH_RADIUS_METERS = 25_000;
+export const EXPANDED_SEARCH_RADIUS_METERS = 45_000;
 
-/** Provider-driven pagination with no app-imposed page or result cutoff. */
-export function advancePageToken(value: unknown, usedTokens: Set<string>): string | undefined {
-  if (value === undefined || value === null || value === "") return undefined;
-  if (typeof value !== "string" || !value.trim()) throw new Error("Invalid search page token.");
-  if (usedTokens.has(value)) throw new Error("Google Maps repeated a page token; the search is incomplete.");
-  usedTokens.add(value);
-  return value;
+/** Expand once on Load More; Overpass returns all matching elements within a radius. */
+export function nextSearchRadius(currentRadius: number): number | null {
+  return currentRadius < EXPANDED_SEARCH_RADIUS_METERS ? EXPANDED_SEARCH_RADIUS_METERS : null;
 }

@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button";
 import { useSession } from "@/components/session-provider";
 import { lovable } from "@/integrations/lovable";
 import { supabase } from "@/integrations/supabase/client";
-import { activeLeads, businessKey, displayableLeads, mapsUrl, NICHES, tieredLeads, NICHE_QUERIES, type Lead } from "@/lib/leads";
-import { searchLeadsBatch, type PageCursor } from "@/lib/places.functions";
+import { activeLeads, businessKey, displayableLeads, mapsUrl, NICHES, type Lead } from "@/lib/leads";
+import { searchOsmLeads, type OsmSearchCursor } from "@/lib/osm.functions";
 
 import { readHistory, saveContacted } from "@/lib/contacted-history";
 import "@lovable.dev/cloud-auth-js/styles.css";
@@ -28,7 +28,7 @@ export const Route = createFileRoute("/")({
 });
 
 function Index() {
-  const search = useServerFn(searchLeadsBatch);
+  const search = useServerFn(searchOsmLeads);
   const { user, ready } = useSession();
   const queryClient = useQueryClient();
   const [city, setCity] = useState("");
@@ -37,7 +37,8 @@ function Index() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [tab, setTab] = useState<"active" | "contacted">("active");
   const [busy, setBusy] = useState(false);
-  const [cursors, setCursors] = useState<PageCursor[]>([]);
+  const [cursor, setCursor] = useState<OsmSearchCursor | null>(null);
+  const [status, setStatus] = useState("");
   const [copied, setCopied] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [needsSignIn, setNeedsSignIn] = useState(false);
@@ -51,12 +52,12 @@ function Index() {
     enabled: !!user,
   });
   const history = user ? historyQuery.data ?? [] : [];
-  useEffect(() => { searchVersion.current++; setLeads([]); setError(""); setNeedsSignIn(false); }, [user?.id]);
+  useEffect(() => { searchVersion.current++; setLeads([]); setError(""); setStatus(""); setCursor(null); setNeedsSignIn(false); }, [user?.id]);
   function clearSearch() {
     searchVersion.current++;
-    setLeads([]); setError(""); setTab("active"); setCursors([]);
+    setLeads([]); setError(""); setStatus(""); setTab("active"); setCursor(null);
   }
-  const visible = tieredLeads(activeLeads(leads, history));
+  const visible = activeLeads(leads, history);
   const qualifiedHistory = displayableLeads(history);
   const displayed = tab === "active" ? visible : qualifiedHistory;
   const input = "w-full border-2 border-foreground bg-background px-4 py-3 font-mono text-sm outline-none focus:bg-foreground focus:text-background";
@@ -67,37 +68,30 @@ function Index() {
     const result = await lovable.auth.signInWithOAuth(provider, { redirect_uri: window.location.origin });
     if (result.error) setError("Sign-in failed. Please try again.");
   }
-  /** Generate: page 1 of every keyword variation. Load More: next page of each keyword that has one. */
   async function run(more = false) {
     if (operation.current || !ready || !city.trim() || !country.trim()) return;
     if (!user) { setNeedsSignIn(true); return; }
-    const queue: PageCursor[] = more ? cursors : (NICHE_QUERIES[niche] ?? []).map((_, phrase) => ({ phrase }));
-    if (queue.length === 0) return;
+    if (more && !cursor) return;
     operation.current = true; setBusy(true); setError("");
     const owner = user.id;
     const version = more ? searchVersion.current : ++searchVersion.current;
     const scope = { city: city.trim().slice(0, 80), country: country.trim().slice(0, 80), niche };
-    if (!more) { setLeads([]); setTab("active"); setCursors([]); }
+    if (!more) { setLeads([]); setTab("active"); setCursor(null); setStatus(""); }
     try {
       const latest = await readHistory(owner);
       if (identity.current !== owner || searchVersion.current !== version) return;
       queryClient.setQueryData(["contacted-leads", owner], latest);
-      const pending: PageCursor[] = [];
-      for (const current of queue) {
-        const result = await Promise.race([
-          search({ data: { ...scope, phrase: current.phrase, ...(current.pageToken ? { pageToken: current.pageToken } : {}) } }),
-          new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 9_000)),
-        ]).catch(err => { console.error("Page failed:", err); return { leads: [] as Lead[], scanned: 0, next: null, error: "timeout" }; });
-        if (identity.current !== owner || searchVersion.current !== version) return;
-        // A slow page is skipped silently; other keywords keep going.
-        if (result.error && result.error !== "timeout") { setError(result.error); break; }
-        setLeads(prev => activeLeads([...prev, ...result.leads], latest));
-        if (result.next && result.next.phrase === current.phrase && result.next.pageToken) pending.push(result.next);
-      }
-      setCursors(pending);
+      const result = await search({ data: { ...scope, ...(more && cursor ? { cursor } : {}) } });
+      if (identity.current !== owner || searchVersion.current !== version) return;
+      if (result.error) { setError(result.error); setCursor(null); return; }
+      const batch = activeLeads(result.leads, latest);
+      setLeads(prev => activeLeads([...prev, ...batch], latest));
+      setCursor(result.next);
+      const areaKm = Math.round(result.radius / 1000);
+      setStatus(`Found ${batch.length} new real listings in the ${areaKm} km search area (${result.scanned} OpenStreetMap records checked).`);
     } catch (err) {
       console.error("Lead search failed:", err);
-      if (identity.current === owner && searchVersion.current === version) setError("Could not complete the search. Please try again.");
+      if (identity.current === owner && searchVersion.current === version) setError("OpenStreetMap search could not be completed. Please try again.");
     }
     finally { operation.current = false; setBusy(false); }
   }
@@ -122,7 +116,7 @@ function Index() {
   }
   function exportCsv() {
     const cell = (v: string) => `"${v.replace(/"/g, '""')}"`;
-    const rows = [["Business", "Phone", "Address", "Website", "Rating", "Reviews", "Maps Link"], ...displayed.map(l => [l.name, l.phone, l.address, "None", String(l.google_rating ?? ""), String(l.review_count ?? ""), mapsUrl(l)])];
+    const rows = [["Business", "Phone", "Address", "Website", "Rating", "Reviews", "Maps Link"], ...displayed.map(l => [l.name, l.phone, l.address, "No Website", l.google_rating === null ? "N/A (OSM)" : String(l.google_rating), l.review_count === null ? "N/A (OSM)" : String(l.review_count), mapsUrl(l)])];
     const url = URL.createObjectURL(new Blob([rows.map(r => r.map(cell).join(",")).join("\n")], { type: "text/csv" }));
     const a = document.createElement("a"); a.href = url; a.download = `199-brand-leads-${tab}.csv`; a.click(); URL.revokeObjectURL(url);
   }
@@ -157,7 +151,7 @@ function Index() {
            <label className="space-y-2"><span className="font-mono text-xs uppercase tracking-widest">City</span><input className={input} value={city} maxLength={80} onChange={e => { clearSearch(); setCity(e.target.value); }} placeholder="Austin" /></label>
            <label className="space-y-2"><span className="font-mono text-xs uppercase tracking-widest">Country</span><input className={input} value={country} maxLength={80} onChange={e => { clearSearch(); setCountry(e.target.value); }} placeholder="USA" /></label>
            <label className="space-y-2"><span className="font-mono text-xs uppercase tracking-widest">Niche</span><select className={input} value={niche} onChange={e => { const next = NICHES.find(n => n === e.target.value); if (next) { clearSearch(); setNiche(next); } }}>{NICHES.map(n => <option key={n}>{n}</option>)}</select></label>
-          <Button onClick={() => run()} disabled={busy || !ready || !city.trim() || !country.trim()} className={`${action} h-auto py-3 bg-foreground text-background hover:bg-background hover:text-foreground font-bold`}>{busy ? `Scanning Google Maps (${visible.length} found)…` : "Generate Leads"}</Button>
+          <Button onClick={() => run()} disabled={busy || !ready || !city.trim() || !country.trim()} className={`${action} h-auto py-3 bg-foreground text-background hover:bg-background hover:text-foreground font-bold`}>{busy ? "Searching OpenStreetMap…" : "Generate Leads"}</Button>
         </section>
         <section className="grid gap-4 md:grid-cols-2">
           <div className="border-2 border-foreground bg-foreground p-6 text-background"><p className="font-mono text-xs uppercase tracking-widest">Total Leads Found</p><p className="mt-2 text-6xl font-black">{visible.length}</p></div>
@@ -174,18 +168,20 @@ function Index() {
           </div>
         </div>
         {ready && !user && (tab === "contacted" || needsSignIn) && <section className="border-y-2 border-foreground py-5 space-y-4">
-           <p className="font-mono text-sm">Sign in to search Google Maps and save your contacted leads.</p>
+           <p className="font-mono text-sm">Sign in to search OpenStreetMap and save your contacted leads.</p>
           <div className="flex flex-wrap gap-3"><Button variant="outline" className={action} onClick={() => signIn("google")}>Continue with Google</Button><Button className="lovable-auth-button" onClick={() => signIn("lovable")}>Continue with Lovable</Button></div>
         </section>}
         {(error || historyQuery.isError) && <div role="alert" className="border-2 border-foreground p-4 text-sm"><p>{error || "Could not load contacted history. Please try again."}</p>{historyQuery.isError && <Button variant="outline" className={`${action} mt-3`} onClick={() => historyQuery.refetch()}>Retry history</Button>}</div>}
+        {status && <p role="status" className="font-mono text-sm">{status}</p>}
         <section role="tabpanel" aria-label={tab === "active" ? "Generate Leads" : "Contacted Leads"} className="border-2 border-foreground overflow-x-auto">
           <table className="w-full text-left text-sm">
-            <thead className="bg-foreground text-background font-mono text-xs uppercase tracking-widest"><tr><th className="p-4">Business</th><th className="p-4">Phone</th><th className="p-4">Address</th><th className="p-4">Website</th>{tab === "contacted" && <th className="p-4">Contacted</th>}<th className="p-4">Maps Link</th><th className="p-4">Actions</th></tr></thead>
+            <thead className="bg-foreground text-background font-mono text-xs uppercase tracking-widest"><tr><th className="p-4">Business</th><th className="p-4">Phone</th><th className="p-4">Address</th><th className="p-4">Website</th><th className="p-4">Rating</th><th className="p-4">Reviews</th>{tab === "contacted" && <th className="p-4">Contacted</th>}<th className="p-4">Maps Link</th><th className="p-4">Actions</th></tr></thead>
             <tbody>
-              {displayed.length === 0 && tab === "contacted" && <tr><td colSpan={7} className="p-10 text-center font-mono text-muted-foreground">{user && historyQuery.isPending ? "Loading contacted leads…" : "No contacted leads yet."}</td></tr>}
+              {displayed.length === 0 && tab === "contacted" && <tr><td colSpan={9} className="p-10 text-center font-mono text-muted-foreground">{user && historyQuery.isPending ? "Loading contacted leads…" : "No contacted leads yet."}</td></tr>}
               {displayed.map(lead => <tr key={businessKey(lead)} className="border-t-2 border-foreground">
                 <td className="p-4 font-bold">{lead.name}</td><td className="p-4 font-mono whitespace-nowrap">{lead.phone}</td><td className="p-4">{lead.address}</td>
                 <td className="p-4"><span className="inline-block whitespace-nowrap border-2 border-foreground bg-foreground text-background px-2 py-1 font-mono text-xs uppercase">No Website</span></td>
+                <td className="p-4 font-mono whitespace-nowrap">{lead.google_rating === null ? "N/A (OSM)" : lead.google_rating}</td><td className="p-4 font-mono whitespace-nowrap">{lead.review_count === null ? "N/A (OSM)" : lead.review_count}</td>
                 {tab === "contacted" && <td className="p-4 whitespace-nowrap font-mono text-xs">{"contacted_at" in lead && typeof lead.contacted_at === "string" ? new Date(lead.contacted_at).toLocaleDateString() : ""}</td>}
                 <td className="p-4 whitespace-nowrap"><a href={mapsUrl(lead)} target="_blank" rel="noopener noreferrer" onClick={e => openMaps(e, lead)} title="Open this business in a new Google Maps window" className={`${action} inline-flex items-center gap-2 px-2 py-1 text-xs`}>View ↗</a></td>
                 <td className="p-4"><div className="flex flex-col items-end gap-2">
@@ -196,7 +192,7 @@ function Index() {
             </tbody>
           </table>
         </section>
-        {tab === "active" && cursors.length > 0 && <div className="flex justify-center"><Button onClick={() => run(true)} disabled={busy} className={`${action} h-auto px-8 py-3 font-bold`}>{busy ? `Scanning Google Maps (${visible.length} found)…` : "Load More Leads"}</Button></div>}
+        {tab === "active" && cursor && <div className="flex justify-center"><Button onClick={() => run(true)} disabled={busy} className={`${action} h-auto px-8 py-3 font-bold`}>{busy ? "Searching OpenStreetMap…" : "Load More Leads"}</Button></div>}
       </main>
     </div>
   );

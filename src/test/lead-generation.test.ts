@@ -1,97 +1,96 @@
 import { describe, expect, it } from "vitest";
-import { tieredLeads, activeLeads, businessKey, displayableLeads, mapsUrl, meetsQuality, matchesLocation, NICHES, NICHE_QUERIES, placeToLead, type Place } from "@/lib/leads";
+import {
+  activeLeads, buildOverpassQuery, businessKey, displayableLeads, mapsUrl, meetsQuality,
+  MIN_RATING, MIN_REVIEWS, NICHE_OSM_FILTERS, NICHES, osmElementToLead, type Lead, type OsmElement,
+} from "@/lib/leads";
 
-const place: Place = {
-  id: "real-listing-id", displayName: { text: "Quality Plumbing" },
-  formattedAddress: "10 Main St, Austin, TX, USA", internationalPhoneNumber: "+1 512 234 5678",
-  rating: 4.0, userRatingCount: 20, businessStatus: "OPERATIONAL",
-  addressComponents: [
-    { longText: "Austin", types: ["locality"] },
-    { longText: "United States", shortText: "US", types: ["country"] },
-  ],
+const scope = { city: "Austin", country: "USA" };
+const element: OsmElement = {
+  type: "node", id: 1,
+  tags: {
+    name: "Quality Plumbing", craft: "plumber", phone: "+1 512 234 5678",
+    "addr:housenumber": "10", "addr:street": "Main St", "addr:city": "Austin", "addr:postcode": "78701",
+  },
 };
-const qualityLead = { name: "Quality Plumbing", address: "10 Main St, Austin, USA", phone: "+1 5122345678", website: "None" as const, google_rating: 4.0, review_count: 20, business_status: "ACTIVE", city: "Austin" };
+const osmLead: Lead = {
+  name: "Quality Plumbing", phone: "+1 512 234 5678", address: "10 Main St, Austin, 78701, USA",
+  website: "None", google_rating: null, review_count: null, business_status: "OSM_LISTED",
+  source: "openstreetmap", city: "Austin", country: "USA",
+};
 
-describe("Real lead validation", () => {
-  it("offers exactly five separate home-service niches", () => {
-    expect(NICHES).toEqual(["Plumbing", "HVAC", "Landscaping", "Roofing", "Electrician"]);
-    for (const niche of NICHES) expect(NICHE_QUERIES[niche]?.length).toBe(5);
+describe("OpenStreetMap lead discovery", () => {
+  it("offers separate home-service niches with tag mappings", () => {
+    expect(NICHES).toEqual(["Plumbing", "HVAC", "Landscaping", "Roofing", "Electrician", "Solar", "House Cleaning"]);
+    for (const niche of NICHES) expect(NICHE_OSM_FILTERS[niche]?.length).toBeGreaterThan(0);
   });
-  it("preserves actual listing identity and maps operating status to ACTIVE", () => {
-    expect(placeToLead(place, { city: "Austin", country: "USA" })).toEqual({
-      ...qualityLead, address: place.formattedAddress, phone: place.internationalPhoneNumber, place_id: place.id,
-    });
+
+  it("builds a multi-tag Overpass query for nodes, ways, and relations", () => {
+    const query = buildOverpassQuery("Plumbing", 30.2672, -97.7431, 25_000);
+    expect(query).toContain("nwr(around:25000,30.2672,-97.7431)");
+    expect(query).toContain('["craft"="plumber"]');
+    expect(query).toContain('["shop"="plumber"]');
+    expect(query).toContain('[name~"plumb",i]');
+    expect(query).toContain("out center tags;");
+    expect(() => buildOverpassQuery("Solar", 100, 0, 25_000)).toThrow("coordinates");
   });
-  it("accepts only absent, null, or exactly empty website fields", () => {
-    expect(placeToLead(place)).not.toBeNull();
-    expect(placeToLead({ ...place, websiteUri: null })).not.toBeNull();
-    expect(placeToLead({ ...place, websiteUri: "" })).not.toBeNull();
-    for (const websiteUri of ["https://example.com", "example.com", " https://example.com ", " "]) {
-      expect(placeToLead({ ...place, websiteUri })).toBeNull();
+
+  it("converts a real named OSM record with phone and street address", () => {
+    expect(osmElementToLead(element, scope)).toEqual(osmLead);
+  });
+
+  it("rejects records without a name and every populated website field", () => {
+    expect(osmElementToLead({ ...element, tags: { craft: "plumber" } }, scope)).toBeNull();
+    for (const field of ["website", "contact:website", "url"]) {
+      expect(osmElementToLead({ ...element, tags: { ...element.tags, [field]: "example.com" } }, scope)).toBeNull();
     }
+    expect(osmElementToLead({ ...element, tags: { ...element.tags, website: " " } }, scope)).toEqual(osmLead);
   });
-  it("requires rating at least 4.0", () => {
-    expect(meetsQuality(qualityLead)).toBe(true);
-    expect(placeToLead({ ...place, rating: 3.99 })).toBeNull();
-    expect(activeLeads([{ ...qualityLead, google_rating: 3.99 }], [])).toEqual([]);
-    expect(meetsQuality({ ...qualityLead, google_rating: 5 })).toBe(true);
+
+  it("uses the available phone fields and a real location fallback when address tags are absent", () => {
+    const noStreet: OsmElement = { tags: { name: "Local Contractor", "contact:phone": "+1 555 012 3456" } };
+    const converted = osmElementToLead(noStreet, scope);
+    expect(converted?.phone).toBe("+1 555 012 3456");
+    expect(converted?.address).toBe("Austin, USA");
+    expect(osmElementToLead({ tags: { name: "No Phone" } }, scope)?.phone).toBe("Not listed");
+    expect(osmElementToLead({ tags: { name: "Mobile Contact", "contact:mobile": "+1 555 111 2222" } }, scope)?.phone).toBe("+1 555 111 2222");
   });
-  it("requires at least 5 reviews", () => {
-    expect(placeToLead({ ...place, userRatingCount: 4 })).toBeNull();
-    expect(activeLeads([{ ...qualityLead, review_count: 4 }], [])).toEqual([]);
-    expect(meetsQuality({ ...qualityLead, review_count: 15 })).toBe(true);
-    expect(meetsQuality(qualityLead)).toBe(true);
+
+  it("allows missing OSM ratings and reviews but enforces any numeric values provided", () => {
+    expect(MIN_RATING).toBe(4.0);
+    expect(MIN_REVIEWS).toBe(15);
+    expect(osmElementToLead(element, scope)).toEqual(osmLead);
+    expect(osmElementToLead({ ...element, tags: { ...element.tags, rating: "3.99" } }, scope)).toBeNull();
+    expect(osmElementToLead({ ...element, tags: { ...element.tags, rating: "4.0", user_ratings_total: "14" } }, scope)).toBeNull();
+    expect(osmElementToLead({ ...element, tags: { ...element.tags, rating: "4.0", user_ratings_total: "15" } }, scope)?.google_rating).toBe(4);
+    expect(meetsQuality(osmLead)).toBe(true);
+    expect(meetsQuality({ ...osmLead, google_rating: 3.9 })).toBe(false);
+    expect(meetsQuality({ ...osmLead, review_count: 14 })).toBe(false);
   });
-  it("requires exact ACTIVE status on displayed leads", () => {
-    for (const business_status of ["CLOSED", "TEMPORARILY_CLOSED", "OPERATIONAL", "active", " ACTIVE ", ""]) {
-      expect(displayableLeads([{ ...qualityLead, business_status }])).toEqual([]);
-    }
-    for (const businessStatus of ["CLOSED_PERMANENTLY", "CLOSED_TEMPORARILY", undefined]) {
-      expect(placeToLead({ ...place, businessStatus })).toBeNull();
-    }
-  });
-  it("fails closed for missing or invalid quality and identity fields", () => {
-    for (const google_rating of [null, NaN, Infinity, 5.1]) expect(meetsQuality({ ...qualityLead, google_rating })).toBe(false);
-    for (const review_count of [null, NaN, Infinity, 15.5]) expect(meetsQuality({ ...qualityLead, review_count })).toBe(false);
-    expect(meetsQuality({ ...qualityLead, business_status: null })).toBe(false);
-    for (const invalid of [{ ...place, id: undefined }, { ...place, displayName: undefined }, { ...place, formattedAddress: "" }, { ...place, internationalPhoneNumber: "123" }, { ...place, rating: undefined }, { ...place, userRatingCount: undefined }]) expect(placeToLead(invalid)).toBeNull();
-  });
-  it("strictly scopes listings to the requested city and country", () => {
-    expect(matchesLocation(place, { city: " austin ", country: "USA" })).toBe(true);
-    expect(matchesLocation(place, { city: "Austin", country: "United States" })).toBe(true);
-    expect(placeToLead(place, { city: "Dallas", country: "USA" })).toBeNull();
-    expect(placeToLead(place, { city: "Austin", country: "Canada" })).toBeNull();
-    expect(placeToLead({ ...place, addressComponents: undefined }, { city: "Austin", country: "USA" })).toBeNull();
-  });
-  it("deduplicates names and phones independently", () => {
-    const sameName = { ...qualityLead, name: " QUALITY PLUMBING ", address: "20 Main St", phone: "+1 5129999999" };
-    const samePhone = { ...qualityLead, name: "Other Plumbing", phone: "+1 (512) 234-5678" };
-    expect(activeLeads([qualityLead, sameName, samePhone], [])).toEqual([qualityLead]);
-    expect(activeLeads([sameName, samePhone], [qualityLead])).toEqual([]);
-  });
-  it("removes individual and bulk completed businesses", () => {
-    const second = { ...qualityLead, name: "Second Plumbing", phone: "+1 5129999999", address: "20 Main St" };
-    expect(activeLeads([qualityLead, second], [qualityLead])).toEqual([second]);
-    expect(activeLeads([qualityLead, second], [qualityLead, second])).toEqual([]);
-  });
-  it("hides unqualified legacy history while preserving duplicate exclusions", () => {
-    const legacy = { ...qualityLead, google_rating: null, review_count: null, business_status: null };
+
+  it("keeps legacy unqualified history hidden while retaining strict Google-history checks", () => {
+    const legacy = { ...osmLead, google_rating: null, review_count: null, business_status: null, source: "google" as const };
+    expect(displayableLeads([osmLead])).toEqual([osmLead]);
     expect(displayableLeads([legacy])).toEqual([]);
-    expect(activeLeads([qualityLead], [legacy])).toEqual([]);
-    expect(businessKey(legacy)).toBe(businessKey(qualityLead));
+    expect(meetsQuality({ ...osmLead, source: "google", business_status: "ACTIVE" })).toBe(false);
   });
-  it("constructs the exact dynamic Maps URL with business name address and city", () => {
-    expect(mapsUrl(qualityLead)).toBe("https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent("Quality Plumbing 10 Main St, Austin, USA Austin"));
-    const dallas = { ...qualityLead, name: "A & B Plumbing", address: "20 Oak St, Dallas, USA", city: "Dallas" };
-    expect(new URL(mapsUrl(dallas)).searchParams.get("query")).toBe("A & B Plumbing 20 Oak St, Dallas, USA Dallas");
-    expect(mapsUrl({ ...dallas, place_id: "id" })).toBe(mapsUrl(dallas));
-  });
-});
 
-describe("Tiered reviews", () => {
-  it("prefers 15+ reviews and falls back to 5+ only when none reach 15", () => {
-    const a = { ...qualityLead, review_count: 15 }, b = { ...qualityLead, name: "B", review_count: 5 };
-    expect(tieredLeads([a, b])).toEqual([a]);
-    expect(tieredLeads([b])).toEqual([b]);
+  it("deduplicates by normalized name and address plus listed phone, not name alone", () => {
+    const sameBusiness = { ...osmLead, name: " QUALITY PLUMBING ", phone: "+1 (512) 234-5678" };
+    const samePhone = { ...osmLead, name: "Different Contractor", address: "20 Oak St, Austin, USA" };
+    const differentLocation = { ...osmLead, address: "20 Main St, Austin, USA", phone: "+1 512 999 9999" };
+    expect(activeLeads([osmLead, sameBusiness, samePhone, differentLocation], [])).toEqual([osmLead, differentLocation]);
+    expect(activeLeads([osmLead], [sameBusiness])).toEqual([]);
+    expect(businessKey(osmLead)).toBe(businessKey(sameBusiness));
+  });
+
+  it("excludes contacted businesses even when their old quality data is missing", () => {
+    const legacy = { ...osmLead, google_rating: null, review_count: null, business_status: null, source: "google" as const };
+    expect(displayableLeads([legacy])).toEqual([]);
+    expect(activeLeads([osmLead], [legacy])).toEqual([]);
+  });
+
+  it("builds Google Maps search URLs with name, address, city, and country", () => {
+    expect(mapsUrl(osmLead)).toBe("https://www.google.com/maps/search/?api=1&query=" + encodeURIComponent("Quality Plumbing 10 Main St, Austin, 78701, USA Austin USA"));
+    expect(new URL(mapsUrl({ ...osmLead, name: "A & B Plumbing" })).searchParams.get("query")).toBe("A & B Plumbing 10 Main St, Austin, 78701, USA Austin USA");
   });
 });
