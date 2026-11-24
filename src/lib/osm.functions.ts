@@ -22,6 +22,27 @@ const OVERPASS_ENDPOINTS = [
   "https://overpass.kumi.systems/api/interpreter",
 ] as const;
 const USER_AGENT = "199-Brand Local Lead Lantern/1.0 (https://local-lead-lantern.lovable.app)";
+const geocodeCache = new Map<string, { lat: number; lon: number }>();
+let nominatimQueue: Promise<void> = Promise.resolve();
+let lastNominatimRequestAt = 0;
+
+async function fetchNominatim(url: string): Promise<Response> {
+  const previous = nominatimQueue;
+  let release: (() => void) | undefined;
+  nominatimQueue = new Promise<void>(resolve => { release = resolve; });
+  await previous;
+  try {
+    const waitMs = Math.max(0, 1_000 - (Date.now() - lastNominatimRequestAt));
+    if (waitMs > 0) await new Promise(resolve => setTimeout(resolve, waitMs));
+    lastNominatimRequestAt = Date.now();
+    return await fetch(url, {
+      signal: AbortSignal.timeout(8_000),
+      headers: { Accept: "application/json", "User-Agent": USER_AGENT },
+    });
+  } finally {
+    release?.();
+  }
+}
 
 export const searchOsmLeads = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
@@ -43,27 +64,32 @@ export const searchOsmLeads = createServerFn({ method: "POST" })
       lon = data.cursor.lon;
       radius = data.cursor.radius;
     } else {
-      const params = new URLSearchParams({ format: "json", limit: "1", q: `${data.city}, ${data.country}` });
-      let geocodeResponse: Response;
-      try {
-        geocodeResponse = await fetch(`${NOMINATIM_URL}?${params.toString()}`, {
-          signal: AbortSignal.timeout(8_000),
-          headers: { Accept: "application/json", "User-Agent": USER_AGENT },
-        });
-      } catch (error) {
-        console.warn("Nominatim lookup failed:", error);
-        return { leads: [], scanned: 0, radius: INITIAL_SEARCH_RADIUS_METERS, next: null, error: "Nominatim could not locate this city. Check the spelling and try again." };
-      }
-      if (!geocodeResponse.ok) {
-        console.warn("Nominatim returned status:", geocodeResponse.status);
-        return { leads: [], scanned: 0, radius: INITIAL_SEARCH_RADIUS_METERS, next: null, error: "Nominatim could not locate this city right now. Please try again." };
-      }
-      const locations = await geocodeResponse.json() as { lat?: string; lon?: string }[];
-      const first = locations[0];
-      lat = Number(first?.lat);
-      lon = Number(first?.lon);
-      if (!first || !Number.isFinite(lat) || !Number.isFinite(lon)) {
-        return { leads: [], scanned: 0, radius: INITIAL_SEARCH_RADIUS_METERS, next: null, error: "Nominatim could not find that city and country." };
+      const cacheKey = `${data.city.normalize("NFKC").toLowerCase()}|${data.country.normalize("NFKC").toLowerCase()}`;
+      const cached = geocodeCache.get(cacheKey);
+      if (cached) {
+        lat = cached.lat;
+        lon = cached.lon;
+      } else {
+        const params = new URLSearchParams({ format: "json", limit: "1", q: `${data.city}, ${data.country}` });
+        let geocodeResponse: Response;
+        try {
+          geocodeResponse = await fetchNominatim(`${NOMINATIM_URL}?${params.toString()}`);
+        } catch (error) {
+          console.warn("Nominatim lookup failed:", error);
+          return { leads: [], scanned: 0, radius: INITIAL_SEARCH_RADIUS_METERS, next: null, error: "Nominatim could not locate this city. Check the spelling and try again." };
+        }
+        if (!geocodeResponse.ok) {
+          console.warn("Nominatim returned status:", geocodeResponse.status);
+          return { leads: [], scanned: 0, radius: INITIAL_SEARCH_RADIUS_METERS, next: null, error: "Nominatim could not locate this city right now. Please try again." };
+        }
+        const locations = await geocodeResponse.json() as { lat?: string; lon?: string }[];
+        const first = locations[0];
+        lat = Number(first?.lat);
+        lon = Number(first?.lon);
+        if (!first || !Number.isFinite(lat) || !Number.isFinite(lon)) {
+          return { leads: [], scanned: 0, radius: INITIAL_SEARCH_RADIUS_METERS, next: null, error: "Nominatim could not find that city and country." };
+        }
+        geocodeCache.set(cacheKey, { lat, lon });
       }
       radius = INITIAL_SEARCH_RADIUS_METERS;
     }
@@ -74,7 +100,7 @@ export const searchOsmLeads = createServerFn({ method: "POST" })
       try {
         const response = await fetch(endpoint, {
           method: "POST",
-          signal: AbortSignal.timeout(10_000),
+          signal: AbortSignal.timeout(15_000),
           headers: { Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded; charset=UTF-8", "User-Agent": USER_AGENT },
           body: `data=${encodeURIComponent(query)}`,
         });
