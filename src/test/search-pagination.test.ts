@@ -1,40 +1,24 @@
 import { describe, expect, it } from "vitest";
-import { advancePageToken, RAW_LISTING_CAP, reachedRawCap } from "@/lib/search-pagination";
+import { EXPANDED_SEARCH_RADIUS_METERS, INITIAL_SEARCH_RADIUS_METERS, nextSearchRadius } from "@/lib/search-pagination";
 import { activeLeads, type Lead } from "@/lib/leads";
 
-describe("Full search yield", () => {
-  it("continues past three pages until the provider has no further token", () => {
-    const usedTokens = new Set<string>();
-    for (let page = 1; page <= 12; page++) {
-      expect(advancePageToken(`page-${page}`, usedTokens)).toBe(`page-${page}`);
-    }
-    expect(usedTokens.size).toBe(12);
-    expect(advancePageToken(undefined, usedTokens)).toBeUndefined();
-    expect(advancePageToken(null, usedTokens)).toBeUndefined();
-    expect(advancePageToken("", usedTokens)).toBeUndefined();
+describe("OpenStreetMap radius expansion and full yield", () => {
+  it("searches 25 km first and expands once to 45 km on Load More", () => {
+    expect(INITIAL_SEARCH_RADIUS_METERS).toBe(25_000);
+    expect(EXPANDED_SEARCH_RADIUS_METERS).toBe(45_000);
+    expect(nextSearchRadius(INITIAL_SEARCH_RADIUS_METERS)).toBe(45_000);
+    expect(nextSearchRadius(EXPANDED_SEARCH_RADIUS_METERS)).toBeNull();
   });
-  it("caps raw listings at 200 per search so scans stay deep but bounded", () => {
-    expect(RAW_LISTING_CAP).toBe(200);
-    expect(reachedRawCap(0)).toBe(false);
-    expect(reachedRawCap(199)).toBe(false);
-    expect(reachedRawCap(200)).toBe(true);
-    expect(reachedRawCap(250)).toBe(true);
-  });
-  it("stops a repeated token instead of making endless paid requests", () => {
-    const usedTokens = new Set<string>();
-    advancePageToken("page-2", usedTokens);
-    expect(() => advancePageToken("page-2", usedTokens)).toThrow("search is incomplete");
-    expect(() => advancePageToken(123, usedTokens)).toThrow("Invalid search page token");
-  });
-  it("preserves the entire qualifying unique yield without a 60 or 100 result cap", () => {
-    const candidates: Lead[] = Array.from({ length: 245 }, (_, i) => ({
-      name: `Business ${i}`, phone: `+1512${String(i).padStart(7, "0")}`,
-      address: `${i} Main St, Austin, USA`, website: "None",
-      google_rating: 4.0, review_count: 20, business_status: "ACTIVE",
+
+  it("keeps every unique qualified real listing without an app-imposed result cutoff", () => {
+    const candidates: Lead[] = Array.from({ length: 245 }, (_, index) => ({
+      name: `Business ${index}`, phone: `+1512${String(index).padStart(7, "0")}`,
+      address: `${index} Main St, Austin, USA`, website: "None",
+      google_rating: null, review_count: null, business_status: "OSM_LISTED", source: "openstreetmap",
     }));
     const first = candidates[0];
     if (!first) throw new Error("Expected candidate");
-    expect(activeLeads([...candidates, { ...first, address: "Changed address" }, { ...first, name: "Changed name" }, { ...first, name: "Low rating", phone: "+19999999999", google_rating: 3.99 }], [])).toEqual(candidates);
-    expect(activeLeads(candidates, []).length).toBe(245);
+    expect(activeLeads([...candidates, { ...first, address: "Changed address" }, { ...first, name: "Changed name" }], [])).toEqual(candidates);
+    expect(activeLeads(candidates, [])).toHaveLength(245);
   });
 });

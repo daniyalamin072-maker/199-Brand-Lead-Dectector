@@ -24,10 +24,27 @@ describe("Contacted history persistence", () => {
     expect(mocks.range).toHaveBeenNthCalledWith(2, 1000, 1999);
     expect(mocks.eq).toHaveBeenCalledWith("user_id", "owner");
   });
+  it("identifies OSM-listed history without inventing rating or review data", async () => {
+    mocks.range.mockResolvedValueOnce({ data: [{ ...lead, google_rating: null, review_count: null, business_status: "OSM_LISTED", business_key: "osm", contacted_at: "2026-10-17" }], error: null });
+    const result = await readHistory("owner");
+    expect(result[0]?.source).toBe("openstreetmap");
+    expect(result[0]?.google_rating).toBeNull();
+    expect(result[0]?.review_count).toBeNull();
+  });
   it("stores completed leads once with their owner and stable business identity", async () => {
     mocks.upsert.mockResolvedValue({ error: null });
-    await saveContacted("owner", [{ ...lead, place_id: "transient-place-id", city: "Austin" }, lead]);
+    await saveContacted("owner", [{ ...lead, city: "Austin" }, lead]);
     expect(mocks.upsert).toHaveBeenCalledWith([{ ...lead, business_key: businessKey(lead), user_id: "owner" }], { onConflict: "user_id,business_key", ignoreDuplicates: true });
+  });
+  it("saves a real OSM lead even when OSM has no rating or review count", async () => {
+    mocks.upsert.mockResolvedValue({ error: null });
+    const osmLead = { ...lead, google_rating: null, review_count: null, business_status: "OSM_LISTED", source: "openstreetmap" as const };
+    await saveContacted("owner", [osmLead]);
+    expect(mocks.upsert).toHaveBeenCalledWith([{
+      name: osmLead.name, phone: osmLead.phone, address: osmLead.address, website: "None",
+      google_rating: null, review_count: null, business_status: "OSM_LISTED",
+      business_key: businessKey(osmLead), user_id: "owner",
+    }], { onConflict: "user_id,business_key", ignoreDuplicates: true });
   });
   it("rejects a failed history check instead of silently returning no exclusions", async () => {
     mocks.range.mockResolvedValue({ data: null, error: new Error("History unavailable") });
