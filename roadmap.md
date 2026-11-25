@@ -20,3 +20,11 @@
 - [x] Expand Load More from 25 km to 45 km and append unique results with accurate counts and actual-result status.
 - [x] Preserve CSV export, Maps links, and contacted history; verify the public dashboard and sign-in gate.
 - [ ] Verify signed-in live search and history once preview sign-in is approved and Overpass responds; the test-session request was declined and the endpoints returned 406/timeout here.
+
+## Search, outreach, analytics, and presets
+- [ ] Add fast three-mirror Overpass failover with descriptive request headers and recoverable retry states.
+- [ ] Preserve real-only filtering, accurate deduplication, Load More appending, Maps links, and CSV export.
+- [ ] Add analytics for successful searches, result counts, radius expansion, and contacted leads.
+- [ ] Add on-demand AI outreach drafts using a selected lead and the user's service offer; never send automatically.
+- [ ] Add reusable city, country, niche, and radius presets with browser storage by default.
+- [ ] Add regression coverage, verify preview interactions and build diagnostics, and update project architecture notes.
